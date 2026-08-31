@@ -20,8 +20,13 @@ from .months import Month
 
 COST_FIELDS = ["date", "site", "category", "amount", "settled", "memo"]
 
-#: 정산 상태. 빈 값은 미정산으로 본다 — 받았다고 표시하기 전까지는 못 받은 돈이다.
-SETTLED_VALUES = {"", "미정산", "정산완료", "자부담"}
+#: 정산 상태.
+#:   미정산   — 개인 돈으로 냈고 아직 못 받음 (빈 값도 이걸로 본다)
+#:   정산완료 — 개인 돈으로 냈고 받았음
+#:   법인카드 — 회사가 직접 결제. 애초에 내 통장에서 나가지 않았다
+#:   자부담   — 내가 냈고 받을 생각이 없음
+#: 받았다고 표시하기 전까지는 못 받은 돈으로 본다.
+SETTLED_VALUES = {"", "미정산", "정산완료", "법인카드", "자부담"}
 
 import csv
 
@@ -41,8 +46,13 @@ class BusinessCost:
 
     @property
     def is_outstanding(self) -> bool:
-        """아직 돌려받지 못한 돈. 자부담으로 표시한 것은 애초에 받을 게 아니다."""
+        """아직 돌려받지 못한 돈."""
         return self.settled in ("", "미정산")
+
+    @property
+    def hit_my_account(self) -> bool:
+        """내 통장에서 나갔는가. 법인카드 결제는 나가지 않았다."""
+        return self.settled != "법인카드"
 
 
 def load_costs(path: Path) -> list[BusinessCost]:
@@ -100,6 +110,11 @@ def total(rows: list[BusinessCost]) -> int:
 def outstanding(rows: list[BusinessCost]) -> int:
     """아직 정산받지 못한 금액. 사실상 나에게 갚아야 할 돈이다."""
     return sum(r.amount for r in rows if r.is_outstanding)
+
+
+def paid_from_my_account(rows: list[BusinessCost]) -> int:
+    """내 통장에서 실제로 나간 업무 경비. 법인카드 결제는 빠진다."""
+    return sum(r.amount for r in rows if r.hit_my_account)
 
 
 def by_category(rows: list[BusinessCost]) -> dict[str, int]:

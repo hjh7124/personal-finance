@@ -382,7 +382,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_cost.add_argument("site", help="현장 (예: 고양·정릉)")
     p_cost.add_argument("category", help="분류 (예: 톨비, 주유, 식사)")
     p_cost.add_argument("amount", help="금액")
-    p_cost.add_argument("--settled", choices=["미정산", "정산완료", "자부담"], default="미정산")
+    p_cost.add_argument(
+        "--settled",
+        choices=["미정산", "정산완료", "법인카드", "자부담"],
+        default="미정산",
+        help="법인카드면 내 통장에서 나가지 않은 것으로 계산합니다",
+    )
     p_cost.add_argument("--date", help="YYYY-MM-DD (기본: 오늘)")
     p_cost.add_argument("--memo", help="메모")
     p_cost.set_defaults(func=cmd_cost)

@@ -163,3 +163,33 @@ class BudgetLoadingTest(unittest.TestCase):
         )
         with self.assertRaises(ConfigError):
             business.load_budgets(self.dir)
+
+
+class PaymentSourceTest(unittest.TestCase):
+    def test_corporate_card_never_hits_my_account(self):
+        rows = [cost(3, "주유", 50_000, settled="법인카드")]
+        self.assertEqual(business.total(rows), 50_000)
+        self.assertEqual(business.paid_from_my_account(rows), 0)
+        self.assertEqual(business.outstanding(rows), 0)
+
+    def test_personal_payment_counts_both_ways(self):
+        rows = [cost(3, "주유", 50_000)]
+        self.assertEqual(business.paid_from_my_account(rows), 50_000)
+        self.assertEqual(business.outstanding(rows), 50_000)
+
+    def test_settled_payment_left_my_account_but_came_back(self):
+        rows = [cost(3, "주유", 50_000, settled="정산완료")]
+        self.assertEqual(business.paid_from_my_account(rows), 50_000)
+        self.assertEqual(business.outstanding(rows), 0)
+
+    def test_self_funded_left_my_account_and_stays_gone(self):
+        rows = [cost(3, "주유", 50_000, settled="자부담")]
+        self.assertEqual(business.paid_from_my_account(rows), 50_000)
+        self.assertEqual(business.outstanding(rows), 0)
+
+    def test_corporate_card_still_counts_against_the_budget(self):
+        budget = business.Budget(
+            id="b", name="현장", amount=1_000_000, period="monthly", site="고양", start=Month(2026, 8)
+        )
+        rows = [cost(3, "주유", 400_000, settled="법인카드")]
+        self.assertEqual(business.evaluate_budget(budget, rows, as_of=Month(2026, 8)).spent, 400_000)

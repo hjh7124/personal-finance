@@ -377,13 +377,17 @@ def render_business(costs: list[business_mod.BusinessCost], month: Month | None 
             lines.append(f"  {pad(truncate(name, 14), 14)}{pad(won(amount), 14, 'right')}")
 
     unpaid = business_mod.outstanding(scoped)
+    mine = business_mod.paid_from_my_account(scoped)
     lines.append("")
-    lines.append(f"  {pad('미정산', 14)}{pad(won(unpaid), 14, 'right')}")
+    lines.append(f"  {pad('내 통장에서 나감', 16)}{pad(won(mine), 14, 'right')}")
+    lines.append(f"  {pad('그중 미정산', 16)}{pad(won(unpaid), 14, 'right')}")
     if unpaid:
         lines += _bullet(
             f"{won(unpaid)}은 아직 돌려받지 못한 돈입니다. 정산되면 "
-            "settled 를 '정산완료'로 바꾸세요."
+            "'정산완료'로 바꾸세요."
         )
+    elif mine == 0:
+        lines += _bullet("전액 법인카드 결제라 개인 현금흐름에는 영향이 없습니다.")
     return "\n".join(lines)
 
 
