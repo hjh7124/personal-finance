@@ -88,3 +88,78 @@ class CsvTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class BudgetTest(unittest.TestCase):
+    def budget(self, **overrides):
+        defaults = dict(
+            id="site", name="현장 경비", amount=1_000_000, period="monthly",
+            site="고양", start=Month(2026, 8),
+        )
+        defaults.update(overrides)
+        return business.Budget(**defaults)
+
+    def test_monthly_limit_grows_with_the_months_recorded(self):
+        rows = [cost(3, "주유", 400_000), cost(3, "주유", 400_000, site="정릉")]
+        status = business.evaluate_budget(self.budget(), rows, as_of=Month(2026, 8))
+        self.assertEqual(status.spent, 400_000)      # 다른 현장은 빠진다
+        self.assertEqual(status.limit, 1_000_000)
+        self.assertFalse(status.is_over)
+
+    def test_total_budget_does_not_refill(self):
+        rows = [cost(3, "주유", 700_000), cost(4, "주유", 500_000)]
+        status = business.evaluate_budget(self.budget(period="total"), rows, as_of=Month(2026, 8))
+        self.assertEqual(status.limit, 1_000_000)
+        self.assertTrue(status.is_over)
+        self.assertEqual(status.remaining, -200_000)
+
+    def test_costs_before_the_start_month_are_excluded(self):
+        early = BusinessCost(date=dt.date(2026, 7, 1), site="고양", category="주유", amount=900_000)
+        status = business.evaluate_budget(self.budget(), [early], as_of=Month(2026, 8))
+        self.assertEqual(status.spent, 0)
+
+    def test_budget_without_a_site_covers_everything(self):
+        rows = [cost(3, "주유", 100_000), cost(3, "주유", 200_000, site="정릉")]
+        status = business.evaluate_budget(self.budget(site=None), rows, as_of=Month(2026, 8))
+        self.assertEqual(status.spent, 300_000)
+
+    def test_months_left_only_applies_to_total_budgets(self):
+        rows = [cost(3, "주유", 500_000)]
+        monthly = business.evaluate_budget(self.budget(), rows, as_of=Month(2026, 8))
+        total_budget = business.evaluate_budget(self.budget(period="total"), rows, as_of=Month(2026, 8))
+        self.assertIsNone(monthly.months_left(500_000))
+        self.assertEqual(total_budget.months_left(500_000), 1.0)
+
+    def test_months_left_is_zero_when_over_budget(self):
+        rows = [cost(3, "주유", 1_500_000)]
+        status = business.evaluate_budget(self.budget(period="total"), rows, as_of=Month(2026, 8))
+        self.assertEqual(status.months_left(500_000), 0.0)
+
+
+class BudgetLoadingTest(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.dir = Path(self._tmp.name)
+        self.addCleanup(self._tmp.cleanup)
+
+    def test_missing_file_yields_no_budgets(self):
+        self.assertEqual(business.load_budgets(self.dir), [])
+
+    def test_loads_fields(self):
+        (self.dir / "business_budget.yaml").write_text(
+            "budgets:\n  - id: site\n    name: 현장 경비\n    amount: 1_000_000\n"
+            "    period: total\n    site: 고양\n    start: 2026-08\n",
+            encoding="utf-8",
+        )
+        budget = business.load_budgets(self.dir)[0]
+        self.assertEqual((budget.amount, budget.period, budget.site), (1_000_000, "total", "고양"))
+        self.assertEqual(budget.start, Month(2026, 8))
+
+    def test_bad_period_is_rejected(self):
+        from finance.config import ConfigError
+
+        (self.dir / "business_budget.yaml").write_text(
+            "budgets:\n  - id: x\n    name: x\n    amount: 100\n    period: 분기\n", encoding="utf-8"
+        )
+        with self.assertRaises(ConfigError):
+            business.load_budgets(self.dir)

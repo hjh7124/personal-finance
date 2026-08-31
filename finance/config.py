@@ -166,7 +166,7 @@ class Config:
 
 # ── 로딩 헬퍼 ────────────────────────────────────────────────
 
-def _read_yaml(path: Path) -> dict[str, Any]:
+def read_yaml(path: Path) -> dict[str, Any]:
     if not path.exists():
         raise ConfigError(f"설정 파일이 없습니다: {path}")
     try:
@@ -213,7 +213,7 @@ def _one_of(value: Any, allowed: set[str], where: str) -> str:
 # ── 각 파일 로더 ─────────────────────────────────────────────
 
 def load_profile(data_dir: Path) -> Profile:
-    raw = _read_yaml(data_dir / "profile.yaml")
+    raw = read_yaml(data_dir / "profile.yaml")
     where = "profile.yaml"
     as_of_raw = raw.get("as_of")
     resignation_raw = raw.get("resignation_date")
@@ -239,7 +239,7 @@ def load_profile(data_dir: Path) -> Profile:
 
 
 def load_accounts(data_dir: Path) -> list[Account]:
-    raw = _read_yaml(data_dir / "accounts.yaml")
+    raw = read_yaml(data_dir / "accounts.yaml")
     entries = raw.get("accounts") or []
     if not entries:
         raise ConfigError("accounts.yaml 에 계좌가 하나도 없습니다.")
@@ -264,7 +264,7 @@ def load_accounts(data_dir: Path) -> list[Account]:
 
 
 def load_cashflow_plan(data_dir: Path) -> tuple[list[Income], list[ScheduledExpense]]:
-    raw = _read_yaml(data_dir / "cashflow_plan.yaml")
+    raw = read_yaml(data_dir / "cashflow_plan.yaml")
 
     incomes: list[Income] = []
     for entry in raw.get("incomes") or []:
@@ -302,7 +302,7 @@ def load_cashflow_plan(data_dir: Path) -> tuple[list[Income], list[ScheduledExpe
 
 
 def load_scenarios(data_dir: Path) -> list[Scenario]:
-    raw = _read_yaml(data_dir / "scenarios.yaml")
+    raw = read_yaml(data_dir / "scenarios.yaml")
     entries = raw.get("scenarios") or []
     if not entries:
         raise ConfigError("scenarios.yaml 에 시나리오가 없습니다.")
@@ -330,7 +330,7 @@ def load_checklist(data_dir: Path) -> list[ChecklistItem]:
     path = data_dir / "checklist.yaml"
     if not path.exists():
         return []
-    raw = _read_yaml(path)
+    raw = read_yaml(path)
     items: list[ChecklistItem] = []
     for entry in raw.get("items") or []:
         where = f"checklist.yaml[{entry.get('id', '?')}]"

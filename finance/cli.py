@@ -56,6 +56,7 @@ class Workspace:
         self.expense_rows = load_expenses(self.expenses_path)
         self.income_rows = load_income(self.income_path)
         self.cost_rows = business_mod.load_costs(self.costs_path)
+        self.budgets = business_mod.load_budgets(self.cfg.data_dir)
 
     @property
     def as_of(self) -> Month:
@@ -224,6 +225,14 @@ def cmd_costs(args: argparse.Namespace) -> int:
     month = None if args.all else (Month.parse(args.month) if args.month else ws.as_of)
     print(report.header("업무 경비"))
     print(report.render_business(ws.cost_rows, month))
+
+    if ws.budgets:
+        as_of = month or ws.as_of
+        statuses = [
+            business_mod.evaluate_budget(b, ws.cost_rows, as_of=as_of) for b in ws.budgets
+        ]
+        scoped = business_mod.in_month(ws.cost_rows, as_of)
+        print(report.render_budget(statuses, monthly_rate=business_mod.total(scoped)))
     print()
     print("  업무 경비는 개인 소진 속도에 들어가지 않습니다. 원장이 분리되어 있습니다.")
     print()

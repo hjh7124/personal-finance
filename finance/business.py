@@ -126,3 +126,96 @@ def by_month(rows: list[BusinessCost]) -> dict[Month, int]:
 def workdays(rows: list[BusinessCost]) -> int:
     """경비가 발생한 날의 수. 현장에 나간 날로 본다."""
     return len({r.date for r in rows})
+
+
+# ── 예산 ────────────────────────────────────────────────────
+
+@dataclass(frozen=True)
+class Budget:
+    """경비 예산.
+
+    period 가 monthly 면 매달 새로 채워지는 한도, total 이면 프로젝트 전체에
+    한 번 주어진 금액이다. 같은 100만원이라도 읽는 법이 완전히 다르다.
+    """
+
+    id: str
+    name: str
+    amount: int
+    period: str
+    site: str | None = None
+    start: Month | None = None
+    note: str = ""
+
+    def covers(self, cost: BusinessCost) -> bool:
+        if self.site and cost.site != self.site:
+            return False
+        if self.start and cost.month < self.start:
+            return False
+        return True
+
+
+@dataclass(frozen=True)
+class BudgetStatus:
+    budget: Budget
+    spent: int
+    months_counted: int
+
+    @property
+    def limit(self) -> int:
+        """비교 대상 금액. monthly 예산은 지난 개월 수만큼 누적된다."""
+        if self.budget.period == "monthly":
+            return self.budget.amount * max(1, self.months_counted)
+        return self.budget.amount
+
+    @property
+    def remaining(self) -> int:
+        return self.limit - self.spent
+
+    @property
+    def ratio(self) -> float:
+        return self.spent / self.limit if self.limit else 0.0
+
+    @property
+    def is_over(self) -> bool:
+        return self.spent > self.limit
+
+    def months_left(self, monthly_rate: int) -> float | None:
+        """지금 속도로 남은 예산이 몇 달치인지. monthly 예산에는 의미가 없다."""
+        if self.budget.period != "total" or monthly_rate <= 0:
+            return None
+        return max(0.0, self.remaining / monthly_rate)
+
+
+def load_budgets(data_dir: Path) -> list[Budget]:
+    from .config import ConfigError, read_yaml
+
+    path = data_dir / "business_budget.yaml"
+    if not path.exists():
+        return []
+    raw = read_yaml(path)
+    budgets: list[Budget] = []
+    for entry in raw.get("budgets") or []:
+        where = f"business_budget.yaml[{entry.get('id', '?')}]"
+        period = str(entry.get("period", "monthly"))
+        if period not in ("monthly", "total"):
+            raise ConfigError(f"{where}: period 는 monthly 또는 total 이어야 합니다 ({period!r})")
+        if "amount" not in entry:
+            raise ConfigError(f"{where}: 'amount' 항목이 필요합니다.")
+        budgets.append(
+            Budget(
+                id=str(entry.get("id") or entry.get("name")),
+                name=str(entry.get("name", entry.get("id"))),
+                amount=int(round(entry["amount"])),
+                period=period,
+                site=str(entry["site"]) if entry.get("site") else None,
+                start=Month.parse(entry["start"]) if entry.get("start") else None,
+                note=" ".join(str(entry.get("note", "") or "").split()),
+            )
+        )
+    return budgets
+
+
+def evaluate_budget(budget: Budget, costs: list[BusinessCost], *, as_of: Month) -> BudgetStatus:
+    scoped = [c for c in costs if budget.covers(c) and c.month <= as_of]
+    months = len({c.month for c in scoped})
+    return BudgetStatus(budget=budget, spent=total(scoped), months_counted=months)

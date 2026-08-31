@@ -40,6 +40,7 @@ pip install -r requirements.txt
 | `accounts.yaml` | 계좌와 그 **유동성 등급** |
 | `cashflow_plan.yaml` | 앞으로 들어올 돈(실업급여 등), 시점을 아는 큰 지출 |
 | `scenarios.yaml` | 어떤 가정으로 런웨이를 볼 것인가 |
+| `business_budget.yaml` | 업무 경비 예산 (매달 한도인지 총액인지) |
 
 기록은 CSV 네 개에 쌓인다. `balances.csv`(월말 잔액), `expenses.csv`(지출),
 `income.csv`(실제로 들어온 돈), `business_costs.csv`(업무 경비).
@@ -94,7 +95,7 @@ pip install -r requirements.txt
 | `fin spend <분류> <금액>` | 지출 기록 (`3.2만`, `1.5억` 같은 표기도 됨) |
 | `fin earn <출처> <금액>` | 수입 기록 |
 | `fin cost <현장> <분류> <금액>` | 업무 경비 기록 |
-| `fin costs` | 업무 경비 리포트 · 미정산 잔액 |
+| `fin costs` | 업무 경비 리포트 · 예산 소진률 · 미정산 잔액 |
 | `fin snapshot --set <계좌id>=<금액>` | 월말 잔액 기록 (안 적은 계좌는 지난달 값을 이어받음) |
 | `fin validate` | 설정 오류와 앞뒤 안 맞는 기록 찾기 |
 

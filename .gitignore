@@ -17,3 +17,4 @@ venv/
 /data/expenses.csv
 /data/income.csv
 /data/business_costs.csv
+/data/business_budget.yaml

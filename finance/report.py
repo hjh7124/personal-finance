@@ -387,6 +387,36 @@ def render_business(costs: list[business_mod.BusinessCost], month: Month | None 
     return "\n".join(lines)
 
 
+def render_budget(
+    statuses: list[business_mod.BudgetStatus], *, monthly_rate: int = 0
+) -> str:
+    if not statuses:
+        return ""
+    lines = [title("경비 예산")]
+    for status in statuses:
+        budget = status.budget
+        period = "매달" if budget.period == "monthly" else "총액"
+        mark = "▲" if status.is_over else ("!" if status.ratio >= 0.8 else "○")
+        lines.append(f"  {mark} {truncate(budget.name, 40)}  ({period} {man(budget.amount)}원)")
+        lines.append(
+            f"    {pad('쓴 금액', 12)}{pad(won(status.spent), 15, 'right')}"
+            f"   {bar(status.spent, status.limit, 20)} {status.ratio * 100:.0f}%"
+        )
+        label = "초과" if status.is_over else "남음"
+        lines.append(f"    {pad(label, 12)}{pad(won(abs(status.remaining)), 15, 'right')}")
+
+        left = status.months_left(monthly_rate)
+        if left is not None:
+            lines.append(
+                f"    {pad('지금 속도로', 12)}{pad(f'{left:.1f}개월치', 15, 'right')}"
+            )
+        if budget.note:
+            lines.extend(wrap(budget.note, WIDTH, indent="    "))
+    lines.append("")
+    lines.append("  ○ 여유   ! 80% 이상   ▲ 초과")
+    return "\n".join(lines)
+
+
 # ── 체크리스트 ──────────────────────────────────────────────
 
 def render_checklist(
