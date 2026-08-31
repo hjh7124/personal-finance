@@ -2,41 +2,59 @@
 # 앞으로 들어올 돈 / 나갈 돈 (예정)
 #
 # 여기 적는 것은 "미래 계획"입니다.
-# 이미 쓴 돈은 data/expenses.csv 에 기록하세요.
+# 이미 쓴 돈은 data/expenses.csv 에 기록합니다.
 # ─────────────────────────────────────────────────────────────
 
 incomes:
   # confidence: confirmed(확정) | expected(예상) | optimistic(되면 좋고)
-  # 시나리오마다 어느 수준까지 수입으로 인정할지가 다릅니다.
   #
-  # 예시 ─ 실제 수급이 결정되면 금액·기간을 채우고 confidence를 올리세요.
   # - id: unemployment_benefit
   #   name: 구직급여(실업급여)
   #   amount: 1_890_000
   #   start: 2026-09
-  #   end: 2027-02          # 소정급여일수 기준 마지막 달(포함)
+  #   end: 2027-02
   #   confidence: expected
-  #
-  # - id: side_income
-  #   name: 프리랜스 수입
-  #   amount: 500_000
-  #   start: 2026-10
-  #   end: 2027-06
-  #   confidence: optimistic
   []
 
 scheduled_expenses:
   # 매달은 아니지만 시점과 금액을 아는 큰 지출.
-  # 매달 나가는 고정비는 expenses.csv 의 kind: fixed 로 이미 잡히므로
-  # 여기 또 적으면 이중 계산됩니다.
   #
-  # - id: income_tax_filing
-  #   name: 종합소득세 납부
-  #   amount: 800_000
-  #   months: [2027-05]
-  #
-  # - id: holiday_and_events
-  #   name: 명절·경조사·연간 보험료
-  #   amount: 1_200_000
-  #   months: [2027-01, 2027-09]
-  []
+  # ⚠ 매달 나가는 고정비는 expenses.csv 의 kind: fixed 로 이미 잡히므로
+  #    여기 또 적으면 이중 계산됩니다.
+
+  # ── 이미 확정된 할부 잔여분 ────────────────────────────────
+  # 8월에 1회차를 냈고(expenses.csv 에 irregular 로 기록됨),
+  # 9월·10월에 같은 금액이 자동으로 빠져나갑니다. 이미 쓴 돈입니다.
+  - id: installment_clothing
+    name: 아울렛 할부 잔여 (3개월 중 2·3회차)
+    amount: 484_200
+    months: [2026-09, 2026-10]
+    note: 188,800 + 177,400 + 118,000
+
+  - id: installment_medical
+    name: 마운자로 할부 잔여 (3개월 중 2·3회차)
+    amount: 126_800
+    months: [2026-09, 2026-10]
+
+  # ── 아직 금액을 모르는 것 ──────────────────────────────────
+  - id: health_insurance_local
+    name: 건강보험 지역가입 보험료
+    amount: 0
+    months: []
+    note: >
+      9월에 첫 고지서가 나옵니다. 금액을 확인하면 여기 채우고,
+      매달 나가는 것이므로 이후에는 expenses.csv 에 kind: fixed 로 기록하세요.
+
+  - id: national_pension
+    name: 국민연금 보험료
+    amount: 0
+    months: []
+    note: 납부예외를 신청했다면 0, 임의가입을 택했다면 월 금액 입력
+
+  - id: income_tax_filing
+    name: 종합소득세 신고 (2026년 근로소득 정산분)
+    amount: 0
+    months: [2027-05]
+    note: >
+      연중 퇴사라 연말정산을 못 했다면 2027년 5월에 직접 신고.
+      보통 환급이 나오므로 확정되면 incomes 쪽으로 옮겨도 됩니다.
