@@ -47,6 +47,13 @@ class ReadOnlyCommandTest(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn("base", text)
 
+    def test_report_shows_income_and_net_cashflow(self):
+        code, text = run("--data-dir", str(EXAMPLE_DIR), "report", "--month", "2026-08")
+        self.assertEqual(code, 0)
+        self.assertIn("수입", text)
+        self.assertIn("순현금흐름", text)
+        self.assertIn("CMA 월 이자".split()[0], text)
+
     def test_report_and_checklist_and_accounts(self):
         for argv in (["report", "--month", "2026-08"], ["checklist"], ["accounts"]):
             code, text = run("--data-dir", str(EXAMPLE_DIR), *argv)
@@ -70,6 +77,18 @@ class WriteCommandTest(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn("32,000원", text)
         self.assertIn("2026-09-02,식비,32000,variable,", (self.dir / "expenses.csv").read_text(encoding="utf-8"))
+
+    def test_earn_appends_a_row(self):
+        code, text = run("--data-dir", str(self.dir), "earn", "구직급여", "189만", "--date", "2026-09-15")
+        self.assertEqual(code, 0)
+        self.assertIn("1,890,000원", text)
+        self.assertIn("2026-09-15,구직급여,1890000,", (self.dir / "income.csv").read_text(encoding="utf-8"))
+
+    def test_earn_creates_the_file_when_missing(self):
+        (self.dir / "income.csv").unlink()
+        code, _ = run("--data-dir", str(self.dir), "earn", "이자", "5000")
+        self.assertEqual(code, 0)
+        self.assertTrue((self.dir / "income.csv").read_text(encoding="utf-8").startswith("date,source,amount,memo"))
 
     def test_spend_rejects_unparseable_amount(self):
         code, text = run("--data-dir", str(self.dir), "spend", "식비", "삼만원")

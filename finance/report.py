@@ -11,7 +11,16 @@ import unicodedata
 
 from . import checklist as checklist_mod
 from .config import LIQUIDITY_LABELS, Config
-from .ledger import BurnRate, ExpenseRow, Snapshot, category_totals, monthly_expense_totals
+from .ledger import (
+    BurnRate,
+    ExpenseRow,
+    IncomeRow,
+    Snapshot,
+    category_totals,
+    monthly_expense_totals,
+    monthly_income_totals,
+    source_totals,
+)
 from .money import bar, man, signed_man, won
 from .months import Month
 from .runway import RunwayResult, liquid_balance, required_spend_for
@@ -254,6 +263,43 @@ def render_diagnosis(cfg: Config, snapshot: Snapshot, burn: BurnRate, results: l
 
 
 # ── 월간 리포트 ─────────────────────────────────────────────
+
+def render_month_income(income: list[IncomeRow], month: Month) -> str:
+    """그 달에 실제로 들어온 돈."""
+    sources = source_totals(income, month)
+    lines = [title(f"{month.label()} 수입")]
+    if not sources:
+        lines.append("  이 달의 수입 기록이 없습니다.")
+        return "\n".join(lines)
+
+    biggest = max(sources.values())
+    for name, amount in sources.items():
+        lines.append(
+            f"  {pad(truncate(name, 18), 18)}{pad(won(amount), 14, 'right')}  {bar(amount, biggest, 18)}"
+        )
+    lines.append("  " + "─" * (WIDTH - 2))
+    lines.append(f"  {pad('합계', 18)}{pad(won(sum(sources.values())), 14, 'right')}")
+    return "\n".join(lines)
+
+
+def render_net_cashflow(
+    expenses: list[ExpenseRow], income: list[IncomeRow], month: Month
+) -> str:
+    """그 달의 순현금흐름. 소득 공백기에는 거의 항상 음수이고, 그 크기가 곧 소진 속도다."""
+    spent = monthly_expense_totals(expenses).get(month, {}).get("total", 0)
+    earned = monthly_income_totals(income).get(month, 0)
+    net = earned - spent
+    lines = [title(f"{month.label()} 순현금흐름")]
+    lines.append(f"  {pad('수입', 18)}{pad(won(earned), 16, 'right')}")
+    lines.append(f"  {pad('지출', 18)}{pad(won(-spent), 16, 'right')}")
+    lines.append("  " + "─" * (WIDTH - 2))
+    lines.append(f"  {pad('순현금흐름', 18)}{pad(signed_man(net) + '원', 16, 'right')}")
+    if net < 0:
+        lines += _bullet(f"이 달 자산이 {won(-net)} 줄었습니다. 이 속도가 그대로 런웨이가 됩니다.")
+    else:
+        lines += _bullet("이 달은 수입이 지출을 덮었습니다. 런웨이가 줄지 않았습니다.")
+    return "\n".join(lines)
+
 
 def render_month(cfg: Config, expenses: list[ExpenseRow], month: Month) -> str:
     totals = monthly_expense_totals(expenses)

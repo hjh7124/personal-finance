@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 
 from finance import ledger
-from finance.ledger import BalanceRow, ExpenseRow, LedgerError
+from finance.ledger import BalanceRow, ExpenseRow, IncomeRow, LedgerError
 from finance.months import Month
 from tests.helpers import make_config
 
@@ -121,6 +121,34 @@ class CsvIoTest(unittest.TestCase):
         self.assertEqual(ledger.load_expenses(self.dir / "nope.csv"), [])
 
 
+def earned(month, amount, source="구직급여"):
+    return IncomeRow(date=Month.parse(month).last_date(), source=source, amount=amount)
+
+
+class IncomeLedgerTest(unittest.TestCase):
+    def test_monthly_totals_group_by_month(self):
+        rows = [earned("2026-08", 100_000), earned("2026-08", 50_000, "이자"), earned("2026-09", 200_000)]
+        totals = ledger.monthly_income_totals(rows)
+        self.assertEqual(totals[Month(2026, 8)], 150_000)
+        self.assertEqual(totals[Month(2026, 9)], 200_000)
+
+    def test_source_totals_are_sorted_by_size(self):
+        rows = [earned("2026-08", 50_000, "이자"), earned("2026-08", 900_000, "구직급여")]
+        self.assertEqual(list(ledger.source_totals(rows, Month(2026, 8))), ["구직급여", "이자"])
+
+    def test_round_trip_through_csv(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "income.csv"
+            ledger.append_income(path, IncomeRow(dt.date(2026, 9, 10), "구직급여", 1_890_000, "1회차"))
+            rows = ledger.load_income(path)
+            self.assertEqual(rows[0].amount, 1_890_000)
+            self.assertEqual(rows[0].memo, "1회차")
+
+    def test_missing_file_reads_as_empty(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(ledger.load_income(Path(tmp) / "nope.csv"), [])
+
+
 class ReconcileTest(unittest.TestCase):
     def test_flags_unexplained_drop(self):
         cfg = make_config()
@@ -132,6 +160,19 @@ class ReconcileTest(unittest.TestCase):
         issues = ledger.reconcile(balances, expenses, cfg)
         self.assertEqual(len(issues), 1)
         self.assertIn("설명되지 않습니다", issues[0])
+
+    def test_recorded_income_explains_a_smaller_drop(self):
+        cfg = make_config()
+        balances = [
+            BalanceRow(dt.date(2026, 7, 31), "cash", 10_000_000),
+            BalanceRow(dt.date(2026, 8, 31), "cash", 9_000_000),
+        ]
+        expenses = [expense("2026-08", "variable", 3_000_000)]
+        income = [earned("2026-08", 2_000_000)]
+        # 수입을 모르면 200만원이 설명되지 않는 것처럼 보인다.
+        self.assertEqual(len(ledger.reconcile(balances, expenses, cfg)), 1)
+        # 수입을 넣으면 앞뒤가 맞는다.
+        self.assertEqual(ledger.reconcile(balances, expenses, cfg, income), [])
 
     def test_silent_when_numbers_line_up(self):
         cfg = make_config()

@@ -18,14 +18,17 @@ from .ledger import (
     BalanceRow,
     BurnRate,
     ExpenseRow,
+    IncomeRow,
     LedgerError,
     Snapshot,
     append_balance,
     append_expense,
+    append_income,
     burn_rate,
     latest_snapshot,
     load_balances,
     load_expenses,
+    load_income,
     reconcile,
 )
 from .money import won
@@ -46,8 +49,10 @@ class Workspace:
         self.cfg: Config = load_config(data_dir)
         self.balances_path = self.cfg.data_dir / "balances.csv"
         self.expenses_path = self.cfg.data_dir / "expenses.csv"
+        self.income_path = self.cfg.data_dir / "income.csv"
         self.balance_rows = load_balances(self.balances_path, known_accounts=self.cfg.account_ids)
         self.expense_rows = load_expenses(self.expenses_path)
+        self.income_rows = load_income(self.income_path)
 
     @property
     def as_of(self) -> Month:
@@ -95,7 +100,9 @@ def cmd_status(args: argparse.Namespace) -> int:
     alerts = report.render_alerts(statuses)
     if alerts:
         print(alerts)
-    warnings = report.render_warnings(ws.cfg, reconcile(ws.balance_rows, ws.expense_rows, ws.cfg))
+    warnings = report.render_warnings(
+        ws.cfg, reconcile(ws.balance_rows, ws.expense_rows, ws.cfg, ws.income_rows)
+    )
     if warnings:
         print(warnings)
     print()
@@ -128,7 +135,9 @@ def cmd_report(args: argparse.Namespace) -> int:
     ws = Workspace(args.data_dir)
     month = Month.parse(args.month) if args.month else ws.as_of
     print(report.header(f"{month.label()} 리포트"))
+    print(report.render_month_income(ws.income_rows, month))
     print(report.render_month(ws.cfg, ws.expense_rows, month))
+    print(report.render_net_cashflow(ws.expense_rows, ws.income_rows, month))
     snapshot = latest_snapshot(ws.balance_rows, on_or_before=month)
     if snapshot:
         print(report.render_assets(ws.cfg, snapshot))
@@ -206,13 +215,29 @@ def cmd_spend(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_earn(args: argparse.Namespace) -> int:
+    ws = Workspace(args.data_dir)
+    row = IncomeRow(
+        date=dt.date.fromisoformat(args.date) if args.date else dt.date.today(),
+        source=args.source,
+        amount=_parse_money(args.amount),
+        memo=args.memo or "",
+    )
+    append_income(ws.income_path, row)
+    print(f"{row.date} {row.source} {won(row.amount)} 기록했습니다.")
+    return 0
+
+
 def cmd_validate(args: argparse.Namespace) -> int:
     ws = Workspace(args.data_dir)
     print(report.header("설정·기록 점검"))
-    print(f"  계좌 {len(ws.cfg.accounts)}개 · 잔액 기록 {len(ws.balance_rows)}행 · 지출 기록 {len(ws.expense_rows)}행")
+    print(
+        f"  계좌 {len(ws.cfg.accounts)}개 · 잔액 {len(ws.balance_rows)}행 · "
+        f"지출 {len(ws.expense_rows)}행 · 수입 {len(ws.income_rows)}행"
+    )
     print(f"  시나리오 {len(ws.cfg.scenarios)}개 · 체크리스트 {len(ws.cfg.checklist)}항목")
 
-    issues = reconcile(ws.balance_rows, ws.expense_rows, ws.cfg)
+    issues = reconcile(ws.balance_rows, ws.expense_rows, ws.cfg, ws.income_rows)
     problems = ws.cfg.warnings + issues
     if problems:
         print(report.render_warnings(ws.cfg, issues))
@@ -253,6 +278,7 @@ def build_parser() -> argparse.ArgumentParser:
             "  fin runway --scenario worst      최악 시나리오의 월별 흐름\n"
             "  fin report --month 2026-08       그 달의 지출 분석\n"
             "  fin spend 식비 32000             지출 기록\n"
+            "  fin earn 구직급여 189만          수입 기록\n"
             "  fin snapshot --set cma=18000000  월말 잔액 기록\n"
             "  fin checklist                    남은 행정 절차\n"
         ),
@@ -297,6 +323,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_spend.add_argument("--date", help="YYYY-MM-DD (기본: 오늘)")
     p_spend.add_argument("--memo", help="메모")
     p_spend.set_defaults(func=cmd_spend)
+
+    p_earn = sub.add_parser("earn", help="수입 기록")
+    p_earn.add_argument("source", help="출처 (예: 구직급여, 이자, 프리랜스)")
+    p_earn.add_argument("amount", help="금액 (예: 1890000, 189만)")
+    p_earn.add_argument("--date", help="YYYY-MM-DD (기본: 오늘)")
+    p_earn.add_argument("--memo", help="메모")
+    p_earn.set_defaults(func=cmd_earn)
 
     sub.add_parser("validate", help="설정과 기록의 앞뒤를 점검").set_defaults(func=cmd_validate)
 

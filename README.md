@@ -20,6 +20,7 @@ pip install -r requirements.txt
 
 ```bash
 ./fin spend 식비 12000 --memo "점심 배달"      # 쓴 돈
+./fin earn 구직급여 189만                      # 들어온 돈
 ./fin snapshot --set main_checking=5200000     # 월말 잔액
 ```
 
@@ -40,7 +41,11 @@ pip install -r requirements.txt
 | `cashflow_plan.yaml` | 앞으로 들어올 돈(실업급여 등), 시점을 아는 큰 지출 |
 | `scenarios.yaml` | 어떤 가정으로 런웨이를 볼 것인가 |
 
-기록은 CSV 두 개에 쌓인다. `balances.csv`(월말 잔액), `expenses.csv`(지출).
+기록은 CSV 세 개에 쌓인다. `balances.csv`(월말 잔액), `expenses.csv`(지출),
+`income.csv`(실제로 들어온 돈).
+
+`cashflow_plan.yaml` 의 수입이 "들어올 예정"이라면 `income.csv` 는 "들어왔다"다.
+둘을 섞지 않는 이유는 예정과 실제가 어긋나는 폭 자체가 정보이기 때문이다.
 
 설정과 기록이 앞뒤가 맞는지는 `./fin validate` 가 봐준다.
 
@@ -71,10 +76,11 @@ pip install -r requirements.txt
 | `fin` / `fin status` | 자산 · 소진속도 · 런웨이 · 임박한 기한을 한 화면에 |
 | `fin runway` | 시나리오 비교 |
 | `fin runway --scenario worst` | 그 시나리오의 월별 현금흐름 표 |
-| `fin report --month YYYY-MM` | 그 달의 카테고리별 지출, 전월 대비 |
+| `fin report --month YYYY-MM` | 그 달의 수입 · 지출 · 순현금흐름 |
 | `fin checklist` | 퇴사 후 행정 절차와 기한 |
 | `fin accounts` | 계좌별 잔액과 유동성 |
 | `fin spend <분류> <금액>` | 지출 기록 (`3.2만`, `1.5억` 같은 표기도 됨) |
+| `fin earn <출처> <금액>` | 수입 기록 |
 | `fin snapshot --set <계좌id>=<금액>` | 월말 잔액 기록 (안 적은 계좌는 지난달 값을 이어받음) |
 | `fin validate` | 설정 오류와 앞뒤 안 맞는 기록 찾기 |
 
@@ -86,7 +92,7 @@ pip install -r requirements.txt
 
 ## 주의
 
-- **실제 원장(`data/balances.csv`, `data/expenses.csv`)은 기본적으로
+- **실제 원장(`data/balances.csv`, `data/expenses.csv`, `data/income.csv`)은 기본적으로
   git 추적에서 빠져 있다.** 이 리포지토리가 public이면 지출 내역이 그대로
   공개되기 때문이다. private으로 바꿨다면 `.gitignore` 의 마지막 두 줄을
   지워라 — 그때부터 자산 변화가 git 이력으로 쌓인다.

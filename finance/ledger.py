@@ -18,6 +18,7 @@ from .months import Month
 
 BALANCE_FIELDS = ["date", "account", "amount", "memo"]
 EXPENSE_FIELDS = ["date", "category", "amount", "kind", "memo"]
+INCOME_FIELDS = ["date", "source", "amount", "memo"]
 
 #: 최근 실지출 평균에 넣지 않는 종류. 비정기 지출은 평균을 왜곡하므로
 #: 미래 계획(cashflow_plan.yaml)에서 시점을 지정해 따로 다룬다.
@@ -46,6 +47,24 @@ class ExpenseRow:
     category: str
     amount: int
     kind: str
+    memo: str = ""
+
+    @property
+    def month(self) -> Month:
+        return Month(self.date.year, self.date.month)
+
+
+@dataclass(frozen=True)
+class IncomeRow:
+    """실제로 들어온 돈.
+
+    cashflow_plan.yaml 의 incomes 가 '들어올 예정'이라면 이쪽은 '들어왔다'다.
+    둘을 섞지 않는 이유는, 예정과 실제가 어긋나는 폭 자체가 정보이기 때문이다.
+    """
+
+    date: dt.date
+    source: str
+    amount: int
     memo: str = ""
 
     @property
@@ -120,6 +139,25 @@ def load_balances(path: Path, *, known_accounts: set[str] | None = None) -> list
     return rows
 
 
+def load_income(path: Path) -> list[IncomeRow]:
+    if not path.exists():
+        return []
+    rows: list[IncomeRow] = []
+    with path.open(encoding="utf-8", newline="") as fh:
+        for line, raw in enumerate(csv.DictReader(fh), start=2):
+            if not (raw.get("date") or "").strip():
+                continue
+            rows.append(
+                IncomeRow(
+                    date=_parse_date(raw["date"], path, line),
+                    source=(raw.get("source") or "미분류").strip(),
+                    amount=_parse_amount(raw.get("amount", "0"), path, line),
+                    memo=(raw.get("memo") or "").strip(),
+                )
+            )
+    return rows
+
+
 def load_expenses(path: Path) -> list[ExpenseRow]:
     if not path.exists():
         return []
@@ -178,6 +216,21 @@ def monthly_expense_totals(rows: list[ExpenseRow]) -> dict[Month, dict[str, int]
     return {month: dict(kinds) for month, kinds in sorted(totals.items())}
 
 
+def monthly_income_totals(rows: list[IncomeRow]) -> dict[Month, int]:
+    totals: dict[Month, int] = defaultdict(int)
+    for row in rows:
+        totals[row.month] += row.amount
+    return dict(sorted(totals.items()))
+
+
+def source_totals(rows: list[IncomeRow], month: Month) -> dict[str, int]:
+    totals: dict[str, int] = defaultdict(int)
+    for row in rows:
+        if row.month == month:
+            totals[row.source] += row.amount
+    return dict(sorted(totals.items(), key=lambda kv: -kv[1]))
+
+
 def category_totals(rows: list[ExpenseRow], month: Month) -> dict[str, int]:
     totals: dict[str, int] = defaultdict(int)
     for row in rows:
@@ -229,30 +282,43 @@ def reconcile(
     balance_rows: list[BalanceRow],
     expense_rows: list[ExpenseRow],
     cfg: Config,
+    income_rows: list[IncomeRow] | None = None,
     *,
     tolerance_ratio: float = 0.25,
 ) -> list[str]:
-    """잔액 변화와 기록한 지출이 앞뒤가 맞는지 본다.
+    """잔액 변화와 기록한 수입·지출이 앞뒤가 맞는지 본다.
 
-    완벽히 맞을 수는 없다(수입, 투자 평가손익, 계좌 간 이체). 다만 유동자산이
-    줄어든 폭보다 기록한 지출이 한참 적다면 빠뜨린 지출이 있다는 뜻이다.
+    유동자산이 줄어든 폭은 대략 (지출 − 수입)과 같아야 한다. 완벽히 맞을
+    수는 없지만(평가손익, 계좌 간 이체), 차이가 크면 빠뜨린 기록이 있다는 뜻이다.
     """
     issues: list[str] = []
     snaps = snapshots(balance_rows)
-    totals = monthly_expense_totals(expense_rows)
+    expenses = monthly_expense_totals(expense_rows)
+    incomes = monthly_income_totals(income_rows or [])
 
     for previous, current in zip(snaps, snaps[1:]):
         if current.month - previous.month != 1:
             continue
         drop = previous.total(cfg.accounts, tier="primary") - current.total(cfg.accounts, tier="primary")
-        recorded = totals.get(current.month, {}).get("total", 0)
-        if drop <= 0 or recorded == 0:
+        spent = expenses.get(current.month, {}).get("total", 0)
+        earned = incomes.get(current.month, 0)
+        if spent == 0:
             continue
-        gap = drop - recorded
-        if gap > max(drop * tolerance_ratio, 200_000):
+        expected = spent - earned
+        gap = drop - expected
+        threshold = max(abs(expected) * tolerance_ratio, 200_000)
+        detail = f"지출 {spent:,}원" + (f" − 수입 {earned:,}원" if earned else "")
+        if gap > threshold:
+            # 실제로 더 많이 빠져나갔다 = 빠뜨린 지출
             issues.append(
-                f"{current.month} 유동자산은 {drop:,}원 줄었는데 기록된 지출은 "
-                f"{recorded:,}원입니다. 약 {gap:,}원이 설명되지 않습니다."
+                f"{current.month} 유동자산은 {drop:,}원 줄었는데 기록은 {detail}"
+                f" = {expected:,}원뿐입니다. 약 {gap:,}원이 설명되지 않습니다."
+            )
+        elif gap < -threshold:
+            # 예상보다 덜 줄었다 = 기록하지 않은 수입이 있을 가능성
+            issues.append(
+                f"{current.month} 기록({detail} = {expected:,}원)보다 유동자산이 "
+                f"{-gap:,}원 덜 줄었습니다. 기록하지 않은 수입이 있는지 확인하세요."
             )
     return issues
 
@@ -273,6 +339,14 @@ def append_balance(path: Path, row: BalanceRow) -> None:
         path,
         BALANCE_FIELDS,
         {"date": row.date.isoformat(), "account": row.account, "amount": str(row.amount), "memo": row.memo},
+    )
+
+
+def append_income(path: Path, row: IncomeRow) -> None:
+    _append_row(
+        path,
+        INCOME_FIELDS,
+        {"date": row.date.isoformat(), "source": row.source, "amount": str(row.amount), "memo": row.memo},
     )
 
 
