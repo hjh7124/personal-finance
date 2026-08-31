@@ -43,6 +43,12 @@ accounts:
     liquidity: long
     note: 토스증권+신한투자+미래에셋 합산. 손실 구간엔 팔지 않는다
 
+  - id: housing_subscription
+    name: 주택청약저축
+    type: deposit
+    liquidity: long
+    note: 월 100,000원 납입 중. 해지하면 청약 자격을 잃으므로 2차 재원으로만 계산
+
   - id: irp
     name: IRP (퇴직금 계좌)
     type: pension
@@ -53,6 +59,18 @@ accounts:
     name: 연금저축
     type: pension
     liquidity: locked
+
+  - id: housing_deposit
+    name: 전세보증금
+    type: real_estate
+    liquidity: locked
+    note: 계약 만기 전에는 현금화 불가
+
+  - id: jeonse_loan
+    name: 전세자금대출 잔액
+    type: debt
+    liquidity: locked
+    note: 월 이자 282,650원. 금리 변동 조건과 만기를 확인할 것
 
   - id: student_loan
     name: 학자금대출 잔액
