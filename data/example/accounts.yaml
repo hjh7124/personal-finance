@@ -1,0 +1,57 @@
+# ─────────────────────────────────────────────────────────────
+# 계좌·자산 정의
+#
+# type      : cash(현금성) | deposit(예적금) | investment(투자) |
+#             pension(연금) | real_estate(부동산) | debt(부채)
+# liquidity : instant(즉시 인출) | short(1개월 내 현금화) |
+#             long(손실·해지비용 감수하면 가능) | locked(사실상 불가)
+#
+# 런웨이 1차 재원 = instant + short
+# 런웨이 2차 재원 = 여기에 long 까지 포함
+# locked(연금 등)는 어떤 경우에도 런웨이에 포함하지 않습니다.
+# ─────────────────────────────────────────────────────────────
+accounts:
+  - id: main_checking
+    name: 주거래 입출금통장
+    type: cash
+    liquidity: instant
+
+  - id: cma
+    name: 증권사 CMA (생활비 파킹)
+    type: cash
+    liquidity: instant
+
+  - id: savings_1yr
+    name: 정기예금 1년
+    type: deposit
+    liquidity: short
+    note: 중도해지 시 이자 손실만 발생, 원금은 보존
+
+  - id: stock_account
+    name: 주식·ETF 계좌
+    type: investment
+    liquidity: long
+    note: 손실 구간에서는 팔지 않는 것이 원칙. 2차 재원으로만 계산
+
+  - id: irp
+    name: IRP (퇴직금 수령 계좌)
+    type: pension
+    liquidity: locked
+    note: 중도인출 시 기타소득세 16.5%. 런웨이에서 제외
+
+  - id: pension_savings
+    name: 연금저축펀드
+    type: pension
+    liquidity: locked
+
+  - id: jeonse_deposit
+    name: 전세보증금
+    type: real_estate
+    liquidity: locked
+    note: 계약 만기 전에는 현금화 불가
+
+  - id: credit_loan
+    name: 신용대출 잔액
+    type: debt
+    liquidity: locked
+    note: 부채는 잔액을 양수로 기록하면 순자산에서 자동으로 차감됩니다

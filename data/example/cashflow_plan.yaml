@@ -1,0 +1,58 @@
+# ─────────────────────────────────────────────────────────────
+# 앞으로 들어올 돈 / 나갈 돈 (예정)
+#
+# 여기에 적는 것은 "미래 계획"입니다.
+# 이미 발생한 실제 지출은 data/expenses.csv 에 기록하세요.
+# ─────────────────────────────────────────────────────────────
+
+incomes:
+  # confidence: confirmed(확정) | expected(예상) | optimistic(되면 좋고)
+  # 시나리오별로 어느 수준까지 수입으로 잡을지가 달라집니다.
+  - id: unemployment_benefit
+    name: 구직급여(실업급여)
+    amount: 1_890_000       # 월 수령액
+    start: 2026-09
+    end: 2027-02            # 소정급여일수 기준 마지막 달 (포함)
+    confidence: expected
+    note: 수급자격 인정 후 확정되면 confidence를 confirmed로 바꾸세요
+
+  - id: side_income
+    name: 프리랜스·부업 수입
+    amount: 500_000
+    start: 2026-10
+    end: 2027-06
+    confidence: optimistic
+
+  - id: interest
+    name: 예금·CMA 이자
+    amount: 60_000
+    start: 2026-09
+    end: 2028-06
+    confidence: expected
+
+scheduled_expenses:
+  # 매달 나가지는 않지만 시점과 금액을 아는 큰 지출.
+  # (매달 나가는 고정비는 expenses.csv 의 kind: fixed 로 잡히므로
+  #  여기 또 적으면 이중 계산됩니다. 주의!)
+  - id: health_insurance_local
+    name: 건강보험 지역가입 보험료 (임의계속 미적용 시 인상분)
+    amount: 0
+    months: []
+    note: 첫 고지서 받은 뒤 실제 금액으로 채우세요
+
+  - id: income_tax_filing
+    name: 종합소득세 납부 (전년도 근로소득 정산분)
+    amount: 800_000
+    months: [2027-05]
+    note: 연말정산을 못 한 채 퇴사했다면 다음해 5월에 직접 신고·납부
+
+  - id: national_pension
+    name: 국민연금 임의가입 보험료
+    amount: 0
+    months: []
+    note: 납부예외를 신청했다면 0, 임의가입을 택했다면 월 금액 입력
+
+  - id: holiday_and_events
+    name: 명절·경조사·연간 보험료
+    amount: 1_200_000
+    months: [2027-01, 2027-09]

@@ -1,0 +1,25 @@
+date,account,amount,memo
+2026-06-30,main_checking,8000000,퇴사 시점
+2026-06-30,cma,20000000,
+2026-06-30,savings_1yr,30000000,
+2026-06-30,stock_account,25000000,
+2026-06-30,irp,0,퇴직금 입금 전
+2026-06-30,pension_savings,12000000,
+2026-06-30,jeonse_deposit,150000000,
+2026-06-30,credit_loan,30000000,
+2026-07-31,main_checking,6500000,
+2026-07-31,cma,19000000,
+2026-07-31,savings_1yr,30000000,
+2026-07-31,stock_account,24000000,
+2026-07-31,irp,42000000,퇴직금 IRP 입금
+2026-07-31,pension_savings,12000000,
+2026-07-31,jeonse_deposit,150000000,
+2026-07-31,credit_loan,30000000,
+2026-08-31,main_checking,5200000,
+2026-08-31,cma,18000000,
+2026-08-31,savings_1yr,30000000,
+2026-08-31,stock_account,26000000,
+2026-08-31,irp,42000000,
+2026-08-31,pension_savings,12000000,
+2026-08-31,jeonse_deposit,150000000,
+2026-08-31,credit_loan,29500000,원금 일부 상환

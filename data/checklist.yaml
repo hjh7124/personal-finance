@@ -1,0 +1,103 @@
+# ─────────────────────────────────────────────────────────────
+# 퇴사 후 행정 체크리스트
+#
+# due_offset_days : 퇴사일(profile.resignation_date) 기준 +일수
+# done            : 처리했으면 true 로 바꾸세요
+# critical        : true면 기한을 놓쳤을 때 돈으로 되돌릴 수 없는 항목
+#
+# ⚠ 제도와 기한은 바뀝니다. 아래 날짜는 "언제 알아봐야 하는지"를
+#   알려주는 알람이지 법적 기한 그 자체가 아닙니다.
+#   실제 신청 전에 반드시 공단·고용센터·홈택스에서 확인하세요.
+# ─────────────────────────────────────────────────────────────
+items:
+  - id: employment_insurance_loss
+    name: 4대보험 상실신고 처리 확인
+    due_offset_days: 14
+    critical: true
+    done: false
+    where: 국민건강보험공단 / 근로복지공단
+    note: 회사가 처리해야 하는 절차. 안 되어 있으면 실업급여 신청이 막힙니다.
+
+  - id: separation_certificate
+    name: 이직확인서 처리 여부 확인
+    due_offset_days: 14
+    critical: true
+    done: false
+    where: 고용보험 홈페이지 (www.ei.go.kr)
+    note: 회사가 제출해야 하며, 이직사유 코드가 실제와 다르면 수급 자격에 영향.
+
+  - id: job_seeker_registration
+    name: 워크넷 구직등록 + 수급자격 신청자 온라인 교육
+    due_offset_days: 14
+    critical: false
+    done: false
+    where: 워크넷 / 고용보험 홈페이지
+    note: 실업급여 신청의 선행 절차. 먼저 끝내두면 방문 절차가 짧아집니다.
+
+  - id: unemployment_claim
+    name: 실업급여 수급자격 신청 (고용센터 방문)
+    due_offset_days: 21
+    critical: true
+    done: false
+    where: 거주지 관할 고용센터
+    note: >
+      수급기간은 퇴사 다음날부터 12개월. 늦게 신청하면 소정급여일수가 남아도
+      12개월이 지나는 순간 못 받습니다. 미룰 이유가 없는 항목.
+
+  - id: health_insurance_option
+    name: 건강보험 임의계속가입 vs 지역가입 vs 피부양자 등재 결정
+    due_offset_days: 60
+    critical: true
+    done: false
+    where: 국민건강보험공단 (1577-1000)
+    note: >
+      임의계속가입은 신청 기한이 짧습니다(최초 지역보험료 고지서 납부기한 기준).
+      고지서를 받는 즉시 직장가입 때 보험료와 비교해 보고 유리한 쪽을 고르세요.
+      배우자·가족의 피부양자로 들어갈 수 있으면 그게 보통 가장 쌉니다.
+
+  - id: national_pension_option
+    name: 국민연금 납부예외 vs 임의가입 결정
+    due_offset_days: 60
+    critical: false
+    done: false
+    where: 국민연금공단 (1355)
+    note: >
+      소득이 없으면 납부예외 신청 가능(가입기간에는 미산입).
+      가입기간을 채워야 하는 상황이면 임의가입이 유리할 수 있습니다.
+
+  - id: retirement_pay_irp
+    name: 퇴직금 IRP 입금 확인 및 운용 지시
+    due_offset_days: 30
+    critical: false
+    done: false
+    where: IRP 개설 금융기관
+    note: >
+      IRP로 받으면 퇴직소득세가 이연됩니다. 현금이 급하지 않다면 인출하지 마세요.
+      입금만 되고 예수금으로 방치되는 경우가 많으니 운용 지시를 꼭 넣을 것.
+
+  - id: credit_review
+    name: 신용·대출 한도 점검
+    due_offset_days: 30
+    critical: false
+    done: false
+    where: 거래 은행 / 신용조회 서비스
+    note: >
+      소득이 끊기면 신용대출 연장·마이너스통장 한도가 줄 수 있습니다.
+      만기와 금리 변동 조건을 지금 확인해 두세요.
+
+  - id: insurance_review
+    name: 보험료 점검 (필요 없는 특약 정리)
+    due_offset_days: 45
+    critical: false
+    done: false
+    note: 소득 공백기의 고정비 중 가장 줄이기 쉬운 항목. 단, 보장 공백은 주의.
+
+  - id: year_end_tax
+    name: 종합소득세 신고 (연말정산 못 한 근로소득 정산)
+    due_offset_days: 300
+    critical: true
+    done: false
+    where: 홈택스
+    note: >
+      연중 퇴사해 연말정산을 못 했다면 다음해 5월에 직접 신고해야 합니다.
+      대부분 환급이 나옵니다. 안 하면 그냥 못 받는 돈.

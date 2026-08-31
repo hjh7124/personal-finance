@@ -1,0 +1,37 @@
+# ─────────────────────────────────────────────────────────────
+# 런웨이 시나리오
+#
+# monthly_spend: 월 지출을 직접 지정. null이면 expenses.csv의
+#                최근 N개월 실지출 평균(비정기 제외)을 사용합니다.
+# spend_multiplier: 위 금액에 곱할 계수
+# income_confidence: 수입으로 인정할 확신도 목록
+# use_tier: primary(instant+short) | secondary(+long)
+# ─────────────────────────────────────────────────────────────
+scenarios:
+  - id: base
+    name: 기본 (지금처럼 살면)
+    monthly_spend: null
+    spend_multiplier: 1.0
+    income_confidence: [confirmed, expected]
+    use_tier: primary
+
+  - id: tight
+    name: 긴축 (고정비만 + 최소 생활비)
+    monthly_spend: 1_800_000
+    spend_multiplier: 1.0
+    income_confidence: [confirmed, expected]
+    use_tier: primary
+
+  - id: worst
+    name: 최악 (실업급여 없고 지출 15% 초과)
+    monthly_spend: null
+    spend_multiplier: 1.15
+    income_confidence: [confirmed]
+    use_tier: primary
+
+  - id: base_with_investments
+    name: 기본 + 투자자산까지 헐면
+    monthly_spend: null
+    spend_multiplier: 1.0
+    income_confidence: [confirmed, expected]
+    use_tier: secondary

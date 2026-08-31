@@ -1,0 +1,42 @@
+# ─────────────────────────────────────────────────────────────
+# 앞으로 들어올 돈 / 나갈 돈 (예정)
+#
+# 여기 적는 것은 "미래 계획"입니다.
+# 이미 쓴 돈은 data/expenses.csv 에 기록하세요.
+# ─────────────────────────────────────────────────────────────
+
+incomes:
+  # confidence: confirmed(확정) | expected(예상) | optimistic(되면 좋고)
+  # 시나리오마다 어느 수준까지 수입으로 인정할지가 다릅니다.
+  #
+  # 예시 ─ 실제 수급이 결정되면 금액·기간을 채우고 confidence를 올리세요.
+  # - id: unemployment_benefit
+  #   name: 구직급여(실업급여)
+  #   amount: 1_890_000
+  #   start: 2026-09
+  #   end: 2027-02          # 소정급여일수 기준 마지막 달(포함)
+  #   confidence: expected
+  #
+  # - id: side_income
+  #   name: 프리랜스 수입
+  #   amount: 500_000
+  #   start: 2026-10
+  #   end: 2027-06
+  #   confidence: optimistic
+  []
+
+scheduled_expenses:
+  # 매달은 아니지만 시점과 금액을 아는 큰 지출.
+  # 매달 나가는 고정비는 expenses.csv 의 kind: fixed 로 이미 잡히므로
+  # 여기 또 적으면 이중 계산됩니다.
+  #
+  # - id: income_tax_filing
+  #   name: 종합소득세 납부
+  #   amount: 800_000
+  #   months: [2027-05]
+  #
+  # - id: holiday_and_events
+  #   name: 명절·경조사·연간 보험료
+  #   amount: 1_200_000
+  #   months: [2027-01, 2027-09]
+  []

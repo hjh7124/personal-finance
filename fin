@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# 어디서 실행하든 리포지토리 루트를 기준으로 동작하게 한다.
+cd "$(dirname "$0")" || exit 1
+exec python3 -m finance "$@"
