@@ -12,9 +12,17 @@ EXAMPLE_DIR = ROOT / "data" / "example"
 
 
 def run(*argv):
+    """CLI를 한 번 돌리고 (종료코드, 출력)을 돌려준다.
+
+    argparse는 잘못된 인자에 SystemExit을 던진다. 실제 프로세스에서는 그게
+    종료코드가 되므로 여기서도 같게 취급한다.
+    """
     out, err = io.StringIO(), io.StringIO()
     with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-        code = main(list(argv))
+        try:
+            code = main(list(argv))
+        except SystemExit as exc:
+            code = exc.code if isinstance(exc.code, int) else 1
     return code, out.getvalue() + err.getvalue()
 
 
@@ -60,6 +68,17 @@ class ReadOnlyCommandTest(unittest.TestCase):
             self.assertEqual(code, 0, msg=f"{argv} 실패:\n{text}")
             self.assertTrue(text.strip())
 
+    def test_costs_report(self):
+        code, text = run("--data-dir", str(EXAMPLE_DIR), "costs", "--month", "2026-08")
+        self.assertEqual(code, 0)
+        self.assertIn("업무 경비", text)
+        self.assertIn("미정산", text)
+
+    def test_costs_all_periods(self):
+        code, text = run("--data-dir", str(EXAMPLE_DIR), "costs", "--all")
+        self.assertEqual(code, 0)
+        self.assertIn("전체", text)
+
     def test_validate_is_clean_on_example_data(self):
         code, _ = run("--data-dir", str(EXAMPLE_DIR), "validate")
         self.assertEqual(code, 0)
@@ -89,6 +108,27 @@ class WriteCommandTest(unittest.TestCase):
         code, _ = run("--data-dir", str(self.dir), "earn", "이자", "5000")
         self.assertEqual(code, 0)
         self.assertTrue((self.dir / "income.csv").read_text(encoding="utf-8").startswith("date,source,amount,memo"))
+
+    def test_cost_appends_a_row(self):
+        code, text = run(
+            "--data-dir", str(self.dir), "cost", "고양·정릉", "톨비", "3400", "--date", "2026-09-02"
+        )
+        self.assertEqual(code, 0)
+        self.assertIn("3,400원", text)
+        written = (self.dir / "business_costs.csv").read_text(encoding="utf-8")
+        self.assertIn("2026-09-02,고양·정릉,톨비,3400,미정산,", written)
+
+    def test_cost_rejects_unknown_settled_value(self):
+        code, _ = run("--data-dir", str(self.dir), "cost", "고양", "톨비", "3400", "--settled", "나중에")
+        self.assertNotEqual(code, 0)
+
+    def test_business_costs_stay_out_of_personal_burn(self):
+        """업무 경비를 넣어도 개인 소진 속도는 변하지 않는다."""
+        before, _ = run("--data-dir", str(self.dir), "status")
+        run("--data-dir", str(self.dir), "cost", "고양", "주유", "500000", "--date", "2026-08-05")
+        _, after_text = run("--data-dir", str(self.dir), "status")
+        self.assertEqual(before, 0)
+        self.assertNotIn("500,000원", after_text.split("소진 속도")[1].split("런웨이")[0])
 
     def test_spend_rejects_unparseable_amount(self):
         code, text = run("--data-dir", str(self.dir), "spend", "식비", "삼만원")

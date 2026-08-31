@@ -11,6 +11,7 @@ import datetime as dt
 import sys
 from pathlib import Path
 
+from . import business as business_mod
 from . import checklist as checklist_mod
 from . import report
 from .config import EXPENSE_KINDS, Config, ConfigError, load_config
@@ -50,9 +51,11 @@ class Workspace:
         self.balances_path = self.cfg.data_dir / "balances.csv"
         self.expenses_path = self.cfg.data_dir / "expenses.csv"
         self.income_path = self.cfg.data_dir / "income.csv"
+        self.costs_path = self.cfg.data_dir / "business_costs.csv"
         self.balance_rows = load_balances(self.balances_path, known_accounts=self.cfg.account_ids)
         self.expense_rows = load_expenses(self.expenses_path)
         self.income_rows = load_income(self.income_path)
+        self.cost_rows = business_mod.load_costs(self.costs_path)
 
     @property
     def as_of(self) -> Month:
@@ -216,6 +219,32 @@ def cmd_spend(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_costs(args: argparse.Namespace) -> int:
+    ws = Workspace(args.data_dir)
+    month = None if args.all else (Month.parse(args.month) if args.month else ws.as_of)
+    print(report.header("업무 경비"))
+    print(report.render_business(ws.cost_rows, month))
+    print()
+    print("  업무 경비는 개인 소진 속도에 들어가지 않습니다. 원장이 분리되어 있습니다.")
+    print()
+    return 0
+
+
+def cmd_cost(args: argparse.Namespace) -> int:
+    ws = Workspace(args.data_dir)
+    row = business_mod.BusinessCost(
+        date=dt.date.fromisoformat(args.date) if args.date else dt.date.today(),
+        site=args.site,
+        category=args.category,
+        amount=_parse_money(args.amount),
+        settled=args.settled,
+        memo=args.memo or "",
+    )
+    business_mod.append_cost(ws.costs_path, row)
+    print(f"{row.date} [{row.site}] {row.category} {won(row.amount)} 기록했습니다.")
+    return 0
+
+
 def cmd_earn(args: argparse.Namespace) -> int:
     ws = Workspace(args.data_dir)
     row = IncomeRow(
@@ -234,7 +263,8 @@ def cmd_validate(args: argparse.Namespace) -> int:
     print(report.header("설정·기록 점검"))
     print(
         f"  계좌 {len(ws.cfg.accounts)}개 · 잔액 {len(ws.balance_rows)}행 · "
-        f"지출 {len(ws.expense_rows)}행 · 수입 {len(ws.income_rows)}행"
+        f"지출 {len(ws.expense_rows)}행 · 수입 {len(ws.income_rows)}행 · "
+        f"업무 경비 {len(ws.cost_rows)}행"
     )
     print(f"  시나리오 {len(ws.cfg.scenarios)}개 · 체크리스트 {len(ws.cfg.checklist)}항목")
 
@@ -280,6 +310,8 @@ def build_parser() -> argparse.ArgumentParser:
             "  fin report --month 2026-08       그 달의 지출 분석\n"
             "  fin spend 식비 32000             지출 기록\n"
             "  fin earn 구직급여 189만          수입 기록\n"
+            "  fin cost 고양·정릉 톨비 3400     업무 경비 기록\n"
+            "  fin costs                        업무 경비 리포트 (개인 지출과 분리)\n"
             "  fin snapshot --set cma=18000000  월말 잔액 기록\n"
             "  fin checklist                    남은 행정 절차\n"
         ),
@@ -331,6 +363,20 @@ def build_parser() -> argparse.ArgumentParser:
     p_earn.add_argument("--date", help="YYYY-MM-DD (기본: 오늘)")
     p_earn.add_argument("--memo", help="메모")
     p_earn.set_defaults(func=cmd_earn)
+
+    p_costs = sub.add_parser("costs", help="업무 경비 리포트")
+    p_costs.add_argument("--month", help="YYYY-MM (기본: 이번 달)")
+    p_costs.add_argument("--all", action="store_true", help="전체 기간")
+    p_costs.set_defaults(func=cmd_costs)
+
+    p_cost = sub.add_parser("cost", help="업무 경비 기록")
+    p_cost.add_argument("site", help="현장 (예: 고양·정릉)")
+    p_cost.add_argument("category", help="분류 (예: 톨비, 주유, 식사)")
+    p_cost.add_argument("amount", help="금액")
+    p_cost.add_argument("--settled", choices=["미정산", "정산완료", "자부담"], default="미정산")
+    p_cost.add_argument("--date", help="YYYY-MM-DD (기본: 오늘)")
+    p_cost.add_argument("--memo", help="메모")
+    p_cost.set_defaults(func=cmd_cost)
 
     sub.add_parser("validate", help="설정과 기록의 앞뒤를 점검").set_defaults(func=cmd_validate)
 

@@ -98,14 +98,14 @@ class Snapshot:
 
 # ── 읽기 ────────────────────────────────────────────────────
 
-def _parse_date(value: str, path: Path, line: int) -> dt.date:
+def parse_date(value: str, path: Path, line: int) -> dt.date:
     try:
         return dt.date.fromisoformat(value.strip())
     except ValueError as exc:
         raise LedgerError(f"{path.name}:{line} 날짜 형식 오류 ({value!r}) — YYYY-MM-DD 여야 합니다.") from exc
 
 
-def _parse_amount(value: str, path: Path, line: int) -> int:
+def parse_amount(value: str, path: Path, line: int) -> int:
     text = value.strip().replace(",", "").replace("_", "")
     if not text:
         return 0
@@ -130,9 +130,9 @@ def load_balances(path: Path, *, known_accounts: set[str] | None = None) -> list
                 )
             rows.append(
                 BalanceRow(
-                    date=_parse_date(raw["date"], path, line),
+                    date=parse_date(raw["date"], path, line),
                     account=account,
-                    amount=_parse_amount(raw.get("amount", "0"), path, line),
+                    amount=parse_amount(raw.get("amount", "0"), path, line),
                     memo=(raw.get("memo") or "").strip(),
                 )
             )
@@ -149,9 +149,9 @@ def load_income(path: Path) -> list[IncomeRow]:
                 continue
             rows.append(
                 IncomeRow(
-                    date=_parse_date(raw["date"], path, line),
+                    date=parse_date(raw["date"], path, line),
                     source=(raw.get("source") or "미분류").strip(),
-                    amount=_parse_amount(raw.get("amount", "0"), path, line),
+                    amount=parse_amount(raw.get("amount", "0"), path, line),
                     memo=(raw.get("memo") or "").strip(),
                 )
             )
@@ -173,9 +173,9 @@ def load_expenses(path: Path) -> list[ExpenseRow]:
                 )
             rows.append(
                 ExpenseRow(
-                    date=_parse_date(raw["date"], path, line),
+                    date=parse_date(raw["date"], path, line),
                     category=(raw.get("category") or "미분류").strip(),
-                    amount=_parse_amount(raw.get("amount", "0"), path, line),
+                    amount=parse_amount(raw.get("amount", "0"), path, line),
                     kind=kind,
                     memo=(raw.get("memo") or "").strip(),
                 )
@@ -338,7 +338,7 @@ def reconcile(
 
 # ── 쓰기 ────────────────────────────────────────────────────
 
-def _append_row(path: Path, fields: list[str], row: dict[str, str]) -> None:
+def append_row(path: Path, fields: list[str], row: dict[str, str]) -> None:
     exists = path.exists() and path.stat().st_size > 0
     with path.open("a", encoding="utf-8", newline="") as fh:
         writer = csv.DictWriter(fh, fieldnames=fields)
@@ -348,7 +348,7 @@ def _append_row(path: Path, fields: list[str], row: dict[str, str]) -> None:
 
 
 def append_balance(path: Path, row: BalanceRow) -> None:
-    _append_row(
+    append_row(
         path,
         BALANCE_FIELDS,
         {"date": row.date.isoformat(), "account": row.account, "amount": str(row.amount), "memo": row.memo},
@@ -356,7 +356,7 @@ def append_balance(path: Path, row: BalanceRow) -> None:
 
 
 def append_income(path: Path, row: IncomeRow) -> None:
-    _append_row(
+    append_row(
         path,
         INCOME_FIELDS,
         {"date": row.date.isoformat(), "source": row.source, "amount": str(row.amount), "memo": row.memo},
@@ -364,7 +364,7 @@ def append_income(path: Path, row: IncomeRow) -> None:
 
 
 def append_expense(path: Path, row: ExpenseRow) -> None:
-    _append_row(
+    append_row(
         path,
         EXPENSE_FIELDS,
         {

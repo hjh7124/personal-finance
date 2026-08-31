@@ -9,6 +9,7 @@ from __future__ import annotations
 import datetime as dt
 import unicodedata
 
+from . import business as business_mod
 from . import checklist as checklist_mod
 from .config import LIQUIDITY_LABELS, Config
 from .ledger import (
@@ -340,6 +341,48 @@ def render_month(cfg: Config, expenses: list[ExpenseRow], month: Month) -> str:
         lines.append(
             f"  {pad('전월 대비', 18)}{pad(signed_man(delta) + '원', 14, 'right')}"
             f"   ({month.plus(-1)}: {won(previous.get('total', 0))})"
+        )
+    return "\n".join(lines)
+
+
+# ── 업무 경비 ───────────────────────────────────────────────
+
+def render_business(costs: list[business_mod.BusinessCost], month: Month | None = None) -> str:
+    """업무 경비는 생활비가 아니다. 얼마 썼나보다 얼마를 못 받았나가 중요하다."""
+    scoped = business_mod.in_month(costs, month) if month else costs
+    label = f"{month.label()} 업무 경비" if month else "업무 경비 (전체)"
+    lines = [title(label)]
+    if not scoped:
+        lines.append("  기록이 없습니다.")
+        return "\n".join(lines)
+
+    categories = business_mod.by_category(scoped)
+    biggest = max(categories.values())
+    for name, amount in categories.items():
+        lines.append(
+            f"  {pad(truncate(name, 14), 14)}{pad(won(amount), 14, 'right')}  {bar(amount, biggest, 18)}"
+        )
+
+    lines.append("  " + "─" * (WIDTH - 2))
+    total = business_mod.total(scoped)
+    days = business_mod.workdays(scoped)
+    lines.append(f"  {pad('합계', 14)}{pad(won(total), 14, 'right')}")
+    if days:
+        lines.append(f"  {pad('현장 나간 날', 14)}{pad(f'{days}일', 14, 'right')}   하루 평균 {won(total // days)}")
+
+    sites = business_mod.by_site(scoped)
+    if len(sites) > 1:
+        lines.append("")
+        for name, amount in sites.items():
+            lines.append(f"  {pad(truncate(name, 14), 14)}{pad(won(amount), 14, 'right')}")
+
+    unpaid = business_mod.outstanding(scoped)
+    lines.append("")
+    lines.append(f"  {pad('미정산', 14)}{pad(won(unpaid), 14, 'right')}")
+    if unpaid:
+        lines += _bullet(
+            f"{won(unpaid)}은 아직 돌려받지 못한 돈입니다. 정산되면 "
+            "settled 를 '정산완료'로 바꾸세요."
         )
     return "\n".join(lines)
 

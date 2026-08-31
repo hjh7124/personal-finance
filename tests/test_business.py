@@ -1,0 +1,90 @@
+import datetime as dt
+import tempfile
+import unittest
+from pathlib import Path
+
+from finance import business
+from finance.business import BusinessCost
+from finance.ledger import LedgerError
+from finance.months import Month
+
+
+def cost(day, category, amount, site="고양", settled="미정산"):
+    return BusinessCost(
+        date=dt.date(2026, 8, day), site=site, category=category, amount=amount, settled=settled
+    )
+
+
+class AggregationTest(unittest.TestCase):
+    def setUp(self):
+        self.rows = [
+            cost(3, "주유", 50_000),
+            cost(3, "톨비", 4_000),
+            cost(3, "톨비", 2_100),
+            cost(10, "톨비", 3_200, site="정릉", settled="정산완료"),
+            cost(14, "식사", 22_000, site="정릉"),
+        ]
+
+    def test_totals_by_category_are_sorted(self):
+        self.assertEqual(
+            list(business.by_category(self.rows)), ["주유", "식사", "톨비", ]
+        )
+        self.assertEqual(business.by_category(self.rows)["톨비"], 9_300)
+
+    def test_totals_by_site(self):
+        self.assertEqual(business.by_site(self.rows), {"고양": 56_100, "정릉": 25_200})
+
+    def test_total_counts_everything(self):
+        self.assertEqual(business.total(self.rows), 81_300)
+
+    def test_outstanding_excludes_settled(self):
+        self.assertEqual(business.outstanding(self.rows), 81_300 - 3_200)
+
+    def test_self_funded_is_not_outstanding(self):
+        rows = [cost(3, "주유", 50_000, settled="자부담")]
+        self.assertEqual(business.total(rows), 50_000)
+        self.assertEqual(business.outstanding(rows), 0)
+
+    def test_workdays_counts_distinct_dates(self):
+        self.assertEqual(business.workdays(self.rows), 3)
+
+    def test_in_month_filters(self):
+        self.assertEqual(len(business.in_month(self.rows, Month(2026, 8))), 5)
+        self.assertEqual(business.in_month(self.rows, Month(2026, 9)), [])
+
+    def test_by_month_groups(self):
+        self.assertEqual(business.by_month(self.rows), {Month(2026, 8): 81_300})
+
+
+class CsvTest(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.dir = Path(self._tmp.name)
+        self.addCleanup(self._tmp.cleanup)
+
+    def test_round_trip(self):
+        path = self.dir / "business_costs.csv"
+        business.append_cost(path, cost(3, "톨비", 3_400))
+        business.append_cost(path, cost(4, "주유", 50_000, settled="정산완료"))
+        rows = business.load_costs(path)
+        self.assertEqual([r.amount for r in rows], [3_400, 50_000])
+        self.assertTrue(rows[0].is_outstanding)
+        self.assertFalse(rows[1].is_outstanding)
+
+    def test_blank_settled_reads_as_outstanding(self):
+        path = self.dir / "c.csv"
+        path.write_text("date,site,category,amount,settled,memo\n2026-08-03,고양,톨비,3400,,\n", encoding="utf-8")
+        self.assertTrue(business.load_costs(path)[0].is_outstanding)
+
+    def test_unknown_settled_value_is_rejected(self):
+        path = self.dir / "c.csv"
+        path.write_text("date,site,category,amount,settled,memo\n2026-08-03,고양,톨비,3400,나중에,\n", encoding="utf-8")
+        with self.assertRaises(LedgerError):
+            business.load_costs(path)
+
+    def test_missing_file_reads_as_empty(self):
+        self.assertEqual(business.load_costs(self.dir / "none.csv"), [])
+
+
+if __name__ == "__main__":
+    unittest.main()
