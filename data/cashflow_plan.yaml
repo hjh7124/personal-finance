@@ -27,9 +27,9 @@ scheduled_expenses:
   # 9월·10월에 같은 금액이 자동으로 빠져나갑니다. 이미 쓴 돈입니다.
   - id: installment_clothing
     name: 아울렛 할부 잔여 (3개월 중 2·3회차)
-    amount: 484_200
+    amount: 531_700
     months: [2026-09, 2026-10]
-    note: 188,800 + 177,400 + 118,000
+    note: 188,800 + 177,400 + 118,000 + 47,500 (4건)
 
   - id: installment_medical
     name: 마운자로 할부 잔여 (3개월 중 2·3회차)
