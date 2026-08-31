@@ -76,6 +76,7 @@ class Workspace:
             self.expense_rows,
             window=self.cfg.profile.burn_window_months,
             as_of=self.as_of,
+            adjustment=sum(a.amount for a in self.cfg.profile.burn_adjustments),
         )
 
 

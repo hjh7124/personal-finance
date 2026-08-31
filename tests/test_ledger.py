@@ -186,3 +186,30 @@ class ReconcileTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class BurnAdjustmentTest(unittest.TestCase):
+    def rows(self):
+        return [expense("2026-08", "fixed", 1_000_000), expense("2026-08", "variable", 1_000_000)]
+
+    def test_adjustment_lowers_the_go_forward_burn(self):
+        burn = ledger.burn_rate(self.rows(), window=3, as_of=Month(2026, 8), adjustment=-300_000)
+        self.assertEqual(burn.measured, 2_000_000)
+        self.assertEqual(burn.monthly, 1_700_000)
+
+    def test_adjustment_can_add_a_cost_not_yet_recorded(self):
+        burn = ledger.burn_rate(self.rows(), window=3, as_of=Month(2026, 8), adjustment=250_000)
+        self.assertEqual(burn.monthly, 2_250_000)
+
+    def test_burn_never_goes_negative(self):
+        burn = ledger.burn_rate(self.rows(), window=3, as_of=Month(2026, 8), adjustment=-9_000_000)
+        self.assertEqual(burn.monthly, 0)
+
+    def test_no_adjustment_leaves_the_measured_value(self):
+        burn = ledger.burn_rate(self.rows(), window=3, as_of=Month(2026, 8))
+        self.assertEqual(burn.monthly, burn.measured)
+
+    def test_empty_ledger_still_carries_the_adjustment(self):
+        burn = ledger.burn_rate([], window=3, as_of=Month(2026, 8), adjustment=250_000)
+        self.assertTrue(burn.is_estimated)
+        self.assertEqual(burn.monthly, 250_000)

@@ -58,6 +58,20 @@ class Account:
 
 
 @dataclass(frozen=True)
+class BurnAdjustment:
+    """최근 실지출 평균에서 더하거나 뺄 항목.
+
+    이미 끝난 지출(평균에는 남아 있지만 앞으로는 안 나감)이나, 앞으로 새로
+    생길 고정비를 반영한다. 기록을 고쳐서 맞추면 과거가 왜곡되므로,
+    과거는 그대로 두고 '앞으로'만 조정한다.
+    """
+
+    name: str
+    amount: int
+    note: str = ""
+
+
+@dataclass(frozen=True)
 class Profile:
     #: 아직 적지 않았으면 None. 행정 기한 계산만 비활성화되고 나머지는 정상 동작한다.
     resignation_date: dt.date | None
@@ -67,6 +81,7 @@ class Profile:
     target_runway_months: int
     emergency_reserve: int
     burn_window_months: int
+    burn_adjustments: tuple[BurnAdjustment, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -212,6 +227,14 @@ def load_profile(data_dir: Path) -> Profile:
         target_runway_months=_as_int(raw.get("target_runway_months", 12), f"{where}.target_runway_months"),
         emergency_reserve=_as_int(raw.get("emergency_reserve", 0), f"{where}.emergency_reserve"),
         burn_window_months=max(1, _as_int(raw.get("burn_window_months", 3), f"{where}.burn_window_months")),
+        burn_adjustments=tuple(
+            BurnAdjustment(
+                name=str(_require(entry, "name", f"{where}.burn_adjustments")),
+                amount=_as_int(_require(entry, "amount", f"{where}.burn_adjustments"), f"{where}.burn_adjustments.amount"),
+                note=" ".join(str(entry.get("note", "") or "").split()),
+            )
+            for entry in (raw.get("burn_adjustments") or [])
+        ),
     )
 
 

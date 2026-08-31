@@ -144,8 +144,18 @@ def render_burn(burn: BurnRate, cfg: Config) -> str:
     window = ", ".join(str(m) for m in burn.months_used)
     lines.append(f"  기준: {window} 평균 (비정기 지출 제외)")
     lines.append("")
-    lines.append(f"  {pad('고정비', 18)}{pad(won(burn.fixed), 16, 'right')}   {bar(burn.fixed, burn.monthly)}")
-    lines.append(f"  {pad('변동비', 18)}{pad(won(burn.variable), 16, 'right')}   {bar(burn.variable, burn.monthly)}")
+    top = max(burn.measured, burn.monthly, 1)
+    lines.append(f"  {pad('고정비', 18)}{pad(won(burn.fixed), 16, 'right')}   {bar(burn.fixed, top)}")
+    lines.append(f"  {pad('변동비', 18)}{pad(won(burn.variable), 16, 'right')}   {bar(burn.variable, top)}")
+    lines.append(f"  {pad('기록 평균', 18)}{pad(won(burn.measured), 16, 'right')}")
+
+    if cfg.profile.burn_adjustments:
+        lines.append("")
+        lines.append("  앞으로의 조정")
+        for item in cfg.profile.burn_adjustments:
+            lines.append(f"  {pad('· ' + truncate(item.name, 30), 32)}{pad(signed_man(item.amount) + '원', 14, 'right')}")
+        lines.append("  " + "─" * (WIDTH - 2))
+
     lines.append(f"  {pad('월 소진액', 18)}{pad(won(burn.monthly), 16, 'right')}")
     lines.append(f"  {pad('연 환산', 18)}{pad(won(burn.monthly * 12), 16, 'right')}")
     return "\n".join(lines)

@@ -241,19 +241,31 @@ def category_totals(rows: list[ExpenseRow], month: Month) -> dict[str, int]:
 
 @dataclass(frozen=True)
 class BurnRate:
-    """최근 실지출로 계산한 월 소진 속도."""
+    """최근 실지출로 계산한 월 소진 속도.
 
-    monthly: int
+    measured 는 기록에서 그대로 나온 값이고, monthly 는 앞으로의 변화
+    (끝난 구독, 새로 생길 보험료)를 반영한 값이다. 계획은 monthly 로 세우되
+    measured 를 함께 보여줘야 조정이 얼마나 개입했는지 보인다.
+    """
+
+    measured: int
     fixed: int
     variable: int
     months_used: tuple[Month, ...]
+    adjustment: int = 0
+
+    @property
+    def monthly(self) -> int:
+        return max(0, self.measured + self.adjustment)
 
     @property
     def is_estimated(self) -> bool:
         return not self.months_used
 
 
-def burn_rate(rows: list[ExpenseRow], *, window: int, as_of: Month) -> BurnRate:
+def burn_rate(
+    rows: list[ExpenseRow], *, window: int, as_of: Month, adjustment: int = 0
+) -> BurnRate:
     """as_of 월까지(포함) 최근 window개월의 정기 지출 평균.
 
     비정기(irregular)는 제외한다. 결혼식 두 건이 겹친 달을 평균에 넣으면
@@ -266,15 +278,16 @@ def burn_rate(rows: list[ExpenseRow], *, window: int, as_of: Month) -> BurnRate:
 
     months = sorted(per_month)[-window:]
     if not months:
-        return BurnRate(monthly=0, fixed=0, variable=0, months_used=())
+        return BurnRate(measured=0, fixed=0, variable=0, months_used=(), adjustment=adjustment)
 
     fixed = sum(per_month[m]["fixed"] for m in months) // len(months)
     variable = sum(per_month[m]["variable"] for m in months) // len(months)
     return BurnRate(
-        monthly=fixed + variable,
+        measured=fixed + variable,
         fixed=fixed,
         variable=variable,
         months_used=tuple(months),
+        adjustment=adjustment,
     )
 
 

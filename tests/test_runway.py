@@ -13,8 +13,15 @@ def snapshot(**balances):
     return Snapshot(month=AUG, balances=balances)
 
 
-def burn(monthly=1_000_000):
-    return BurnRate(monthly=monthly, fixed=monthly // 2, variable=monthly - monthly // 2, months_used=(AUG,))
+def burn(measured=1_000_000, adjustment=0):
+    """measured 는 기록에서 나온 값, adjustment 는 앞으로의 조정."""
+    return BurnRate(
+        measured=measured,
+        fixed=measured // 2,
+        variable=measured - measured // 2,
+        months_used=(AUG,),
+        adjustment=adjustment,
+    )
 
 
 class LiquidBalanceTest(unittest.TestCase):
@@ -81,6 +88,15 @@ class SimulateTest(unittest.TestCase):
 
     def test_measured_burn_is_used_when_scenario_leaves_it_blank(self):
         self.assertEqual(resolve_monthly_spend(make_scenario(monthly_spend=None), burn(1_700_000)), 1_700_000)
+
+    def test_burn_adjustment_feeds_through_to_the_runway(self):
+        """끝난 구독을 빼면 그만큼 더 버틴다."""
+        cfg = make_config()
+        state = snapshot(cash=10_000_000)
+        plain = simulate(cfg, state, make_scenario(monthly_spend=None), burn(1_000_000))
+        trimmed = simulate(cfg, state, make_scenario(monthly_spend=None), burn(1_000_000, adjustment=-200_000))
+        self.assertEqual(trimmed.monthly_spend, 800_000)
+        self.assertGreater(trimmed.months_survived, plain.months_survived)
 
     def test_surplus_never_depletes(self):
         cfg = make_config(incomes=[income(amount=2_000_000, start=Month(2026, 9), end=Month(2099, 12))])

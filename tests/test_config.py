@@ -101,3 +101,24 @@ class ValidationTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class BurnAdjustmentConfigTest(ValidationTest):
+    def test_adjustments_load_with_sign(self):
+        self.write(
+            "profile.yaml",
+            "resignation_date: 2026-07-31\n"
+            "burn_adjustments:\n"
+            "  - name: 끝난 구독\n    amount: -161_227\n"
+            "  - name: 새 보험료\n    amount: 120_000\n",
+        )
+        cfg = load_config(self.dir)
+        self.assertEqual([a.amount for a in cfg.profile.burn_adjustments], [-161_227, 120_000])
+
+    def test_adjustments_default_to_empty(self):
+        self.assertEqual(load_config(self.dir).profile.burn_adjustments, ())
+
+    def test_adjustment_without_amount_is_rejected(self):
+        self.write("profile.yaml", "resignation_date: 2026-07-31\nburn_adjustments:\n  - name: 이름만\n")
+        with self.assertRaises(ConfigError):
+            load_config(self.dir)
