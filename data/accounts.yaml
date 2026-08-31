@@ -1,5 +1,9 @@
 # ─────────────────────────────────────────────────────────────
-# 계좌·자산 정의  ─  본인 계좌에 맞게 이름을 바꾸고, 없는 항목은 지우세요.
+# 계좌·자산 정의
+#
+# 기존 자산관리 포트폴리오 시트의 계좌 구조를 옮겨온 것이다.
+# 그 시트의 데이터는 2025년 9월 기준이라 잔액은 반드시 다시 확인할 것.
+# 잔액은 여기가 아니라 balances.csv(드라이브의 '잔액기록' 시트)에 넣는다.
 #
 # type      : cash(현금성) | deposit(예적금) | investment(투자) |
 #             pension(연금) | real_estate(부동산) | debt(부채)
@@ -8,54 +12,50 @@
 #
 # 런웨이 1차 재원 = instant + short
 # 런웨이 2차 재원 = 여기에 long 까지 포함
-# locked(연금·보증금 등)는 어떤 경우에도 런웨이에 넣지 않습니다.
-# 부채는 잔액을 양수로 기록하면 순자산에서 자동으로 차감됩니다.
+# locked(연금 등)는 어떤 경우에도 런웨이에 넣지 않는다.
+# 부채는 잔액을 양수로 기록하면 순자산에서 자동으로 차감된다.
 # ─────────────────────────────────────────────────────────────
 accounts:
-  - id: main_checking
-    name: 주거래 입출금통장
+  - id: woori
+    name: 우리은행
     type: cash
     liquidity: instant
 
-  - id: parking
-    name: 파킹통장·CMA
+  - id: toss_bank
+    name: 토스뱅크
     type: cash
     liquidity: instant
 
-  - id: savings
-    name: 예적금
+  - id: kakao_bank
+    name: 카카오뱅크
+    type: cash
+    liquidity: instant
+
+  - id: shinhan_savings
+    name: 신한 적금
     type: deposit
     liquidity: short
-    note: 중도해지 시 이자만 손실
+    note: 만기 2030-01 · 중도해지해도 원금은 보존, 이자만 손실
 
-  - id: investment
+  - id: stock_account
     name: 주식·ETF 계좌
     type: investment
     liquidity: long
-    note: 손실 구간엔 팔지 않는다. 2차 재원
+    note: 토스증권+신한투자+미래에셋 합산. 손실 구간엔 팔지 않는다
 
   - id: irp
     name: IRP (퇴직금 계좌)
     type: pension
     liquidity: locked
-    note: 중도인출 시 기타소득세 16.5%
+    note: 중도인출 시 기타소득세 16.5%. 런웨이에서 제외
 
   - id: pension_savings
     name: 연금저축
     type: pension
     liquidity: locked
 
-  - id: housing_deposit
-    name: 보증금·부동산
-    type: real_estate
-    liquidity: locked
-
   - id: student_loan
     name: 학자금대출 잔액
     type: debt
     liquidity: locked
-
-  - id: other_loan
-    name: 기타 대출 잔액
-    type: debt
-    liquidity: locked
+    note: 소득 공백기 상환 유예 가능 여부를 한국장학재단에 확인할 것
