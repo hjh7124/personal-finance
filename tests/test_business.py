@@ -99,12 +99,30 @@ class BudgetTest(unittest.TestCase):
         defaults.update(overrides)
         return business.Budget(**defaults)
 
-    def test_monthly_limit_grows_with_the_months_recorded(self):
+    def test_monthly_budget_looks_at_that_month_only(self):
+        """매달 새로 채워지는 한도이므로 지난달 지출을 끌고 오지 않는다."""
         rows = [cost(3, "주유", 400_000), cost(3, "주유", 400_000, site="정릉")]
         status = business.evaluate_budget(self.budget(), rows, as_of=Month(2026, 8))
         self.assertEqual(status.spent, 400_000)      # 다른 현장은 빠진다
         self.assertEqual(status.limit, 1_000_000)
         self.assertFalse(status.is_over)
+
+    def test_monthly_budget_ignores_other_months(self):
+        july = BusinessCost(date=dt.date(2026, 9, 2), site="고양", category="주유", amount=900_000)
+        rows = [cost(3, "주유", 400_000), july]
+        aug = business.evaluate_budget(self.budget(), rows, as_of=Month(2026, 8))
+        sep = business.evaluate_budget(self.budget(), rows, as_of=Month(2026, 9))
+        self.assertEqual(aug.spent, 400_000)
+        self.assertEqual(sep.spent, 900_000)
+
+    def test_total_budget_accumulates_across_months(self):
+        rows = [
+            cost(3, "주유", 700_000),
+            BusinessCost(date=dt.date(2026, 9, 2), site="고양", category="주유", amount=500_000),
+        ]
+        status = business.evaluate_budget(self.budget(period="total"), rows, as_of=Month(2026, 9))
+        self.assertEqual(status.spent, 1_200_000)
+        self.assertTrue(status.is_over)
 
     def test_total_budget_does_not_refill(self):
         rows = [cost(3, "주유", 700_000), cost(4, "주유", 500_000)]

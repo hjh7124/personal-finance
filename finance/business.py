@@ -177,9 +177,6 @@ class BudgetStatus:
 
     @property
     def limit(self) -> int:
-        """비교 대상 금액. monthly 예산은 지난 개월 수만큼 누적된다."""
-        if self.budget.period == "monthly":
-            return self.budget.amount * max(1, self.months_counted)
         return self.budget.amount
 
     @property
@@ -231,6 +228,14 @@ def load_budgets(data_dir: Path) -> list[Budget]:
 
 
 def evaluate_budget(budget: Budget, costs: list[BusinessCost], *, as_of: Month) -> BudgetStatus:
-    scoped = [c for c in costs if budget.covers(c) and c.month <= as_of]
+    """as_of 시점의 예산 소진 상태.
+
+    monthly 예산은 그 달만 본다 — 매달 새로 채워지는 한도이므로 지난달 지출을
+    끌고 오면 한도를 넘긴 것처럼 보인다. total 예산은 start 이후 전부를 누적한다.
+    """
+    if budget.period == "monthly":
+        scoped = [c for c in costs if budget.covers(c) and c.month == as_of]
+    else:
+        scoped = [c for c in costs if budget.covers(c) and c.month <= as_of]
     months = len({c.month for c in scoped})
     return BudgetStatus(budget=budget, spent=total(scoped), months_counted=months)
