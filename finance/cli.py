@@ -228,11 +228,19 @@ def cmd_costs(args: argparse.Namespace) -> int:
 
     if ws.budgets:
         as_of = month or ws.as_of
-        statuses = [
-            business_mod.evaluate_budget(b, ws.cost_rows, as_of=as_of) for b in ws.budgets
-        ]
+        today = dt.date.today()
+        paces = []
+        for budget in ws.budgets:
+            status = business_mod.evaluate_budget(budget, ws.cost_rows, as_of=as_of)
+            rate, days = business_mod.month_reference(ws.cost_rows, as_of.plus(-1), budget)
+            paces.append(
+                business_mod.pace(
+                    status, ws.cost_rows, as_of=as_of, today=today,
+                    fallback_rate=rate, fallback_workdays=days,
+                )
+            )
         scoped = business_mod.in_month(ws.cost_rows, as_of)
-        print(report.render_budget(statuses, monthly_rate=business_mod.total(scoped)))
+        print(report.render_budget(paces, monthly_rate=business_mod.total(scoped)))
     print()
     print("  업무 경비는 개인 소진 속도에 들어가지 않습니다. 원장이 분리되어 있습니다.")
     print()

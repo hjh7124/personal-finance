@@ -198,6 +198,114 @@ class BudgetStatus:
         return max(0.0, self.remaining / monthly_rate)
 
 
+@dataclass(frozen=True)
+class BudgetPace:
+    """한도 안에서 움직이고 있는가.
+
+    소진률만으로는 늦다. 64%를 쓴 것이 문제인지 아닌지는 며칠이 지났고
+    앞으로 며칠 더 나가야 하는지에 달려 있다. 그래서 이 계산의 중심은
+    비율이 아니라 **하루 단가**다 — 한도를 예상 현장 일수로 나눈 값이
+    넘지 말아야 할 선이고, 실제 하루 단가가 그 아래면 한도 안에 들어온다.
+    """
+
+    status: BudgetStatus
+    elapsed_days: int
+    total_days: int
+    workdays: int
+    per_workday: int
+    per_workday_source: str
+    expected_workdays: int
+
+    #: 이 일수보다 적게 지났으면 월말 추정을 하지 않는다. 표본이 너무 적다.
+    MIN_DAYS_TO_PROJECT = 5
+
+    @property
+    def remaining_days(self) -> int:
+        return max(0, self.total_days - self.elapsed_days)
+
+    @property
+    def affordable_rate(self) -> int:
+        """현장 하루당 넘지 말아야 할 금액. 한도 ÷ 예상 현장 일수."""
+        return self.status.limit // max(1, self.expected_workdays)
+
+    @property
+    def rate_headroom(self) -> int:
+        """허용 단가에서 실제 단가를 뺀 값. 음수면 이 페이스로는 한도를 넘긴다."""
+        return self.affordable_rate - self.per_workday
+
+    @property
+    def affordable_workdays(self) -> int:
+        """남은 예산으로 앞으로 몇 번 더 나갈 수 있나."""
+        if self.per_workday <= 0:
+            return 0
+        return max(0, self.status.remaining // self.per_workday)
+
+    @property
+    def projected(self) -> int | None:
+        """지금 페이스로 갔을 때의 월말 금액. 초반에는 표본이 적어 내지 않는다."""
+        if self.elapsed_days < self.MIN_DAYS_TO_PROJECT or not self.elapsed_days:
+            return None
+        return round(self.status.spent / self.elapsed_days * self.total_days)
+
+    @property
+    def on_track(self) -> bool | None:
+        projected = self.projected
+        return None if projected is None else projected <= self.status.limit
+
+
+def pace(
+    status: BudgetStatus,
+    costs: list[BusinessCost],
+    *,
+    as_of: Month,
+    today: dt.date,
+    fallback_rate: int = 0,
+    fallback_workdays: int = 0,
+) -> BudgetPace:
+    """예산 상태에 시간축을 붙인다.
+
+    이번 달 현장 일수가 아직 적으면 하루 단가와 예상 현장 일수를 지난달
+    실적에서 빌려온다. 한 번 나간 날을 그 달 전체로 늘려 잡으면 예측이 요동친다.
+    """
+    scoped = [c for c in costs if c.month == as_of and status.budget.covers(c)]
+    total_days = as_of.last_date().day
+    elapsed = min(total_days, today.day) if Month(today.year, today.month) == as_of else total_days
+    days = workdays(scoped)
+
+    if days >= 3:
+        rate, source = total(scoped) // days, "이번 달 실적"
+    elif fallback_rate:
+        rate, source = fallback_rate, "지난달 실적"
+    elif days:
+        rate, source = total(scoped) // days, "이번 달 실적 (표본 적음)"
+    else:
+        rate, source = 0, "기록 없음"
+
+    if days >= 3 and elapsed:
+        expected = round(days / elapsed * total_days)
+    else:
+        expected = fallback_workdays or days or 1
+
+    return BudgetPace(
+        status=status,
+        elapsed_days=elapsed,
+        total_days=total_days,
+        workdays=days,
+        per_workday=rate,
+        per_workday_source=source,
+        expected_workdays=max(1, expected),
+    )
+
+
+def month_reference(
+    costs: list[BusinessCost], month: Month, budget: Budget | None = None
+) -> tuple[int, int]:
+    """그 달의 (현장 하루당 평균, 현장 일수). 다음 달 예측의 기준선으로 쓴다."""
+    scoped = [c for c in costs if c.month == month and (budget is None or budget.covers(c))]
+    days = workdays(scoped)
+    return (total(scoped) // days if days else 0), days
+
+
 def load_budgets(data_dir: Path) -> list[Budget]:
     from .config import ConfigError, read_yaml
 

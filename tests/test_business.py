@@ -211,3 +211,89 @@ class PaymentSourceTest(unittest.TestCase):
         )
         rows = [cost(3, "주유", 400_000, settled="법인카드")]
         self.assertEqual(business.evaluate_budget(budget, rows, as_of=Month(2026, 8)).spent, 400_000)
+
+
+class PaceTest(unittest.TestCase):
+    """한도 안에서 움직이는지는 비율이 아니라 하루 단가가 말해준다."""
+
+    def budget(self, amount=1_000_000, period="monthly"):
+        return business.Budget(id="b", name="경비", amount=amount, period=period, start=Month(2026, 8))
+
+    def paced(self, rows, *, today, fallback_rate=0, fallback_workdays=0, month=Month(2026, 8)):
+        status = business.evaluate_budget(self.budget(), rows, as_of=month)
+        return business.pace(
+            status, rows, as_of=month, today=today,
+            fallback_rate=fallback_rate, fallback_workdays=fallback_workdays,
+        )
+
+    def test_allowed_rate_is_limit_over_expected_workdays(self):
+        rows = [cost(d, "주유", 30_000) for d in (1, 5, 9, 13, 17, 21, 25, 29)]
+        p = self.paced(rows, today=dt.date(2026, 8, 31))
+        self.assertEqual(p.workdays, 8)
+        self.assertEqual(p.expected_workdays, 8)
+        self.assertEqual(p.affordable_rate, 125_000)
+        self.assertEqual(p.per_workday, 30_000)
+        self.assertGreater(p.rate_headroom, 0)
+
+    def test_headroom_goes_negative_when_the_rate_is_too_high(self):
+        rows = [cost(d, "주유", 200_000) for d in (1, 5, 9, 13, 17, 21, 25, 29)]
+        p = self.paced(rows, today=dt.date(2026, 8, 31))
+        self.assertEqual(p.per_workday, 200_000)
+        self.assertLess(p.rate_headroom, 0)
+
+    def test_thin_sample_borrows_last_month(self):
+        rows = [cost(1, "톨비", 5_400)]
+        p = self.paced(rows, today=dt.date(2026, 8, 2), fallback_rate=29_145, fallback_workdays=22)
+        self.assertEqual(p.per_workday, 29_145)
+        self.assertEqual(p.per_workday_source, "지난달 실적")
+        self.assertEqual(p.expected_workdays, 22)
+
+    def test_own_sample_wins_once_there_are_three_workdays(self):
+        rows = [cost(d, "주유", 40_000) for d in (1, 2, 3)]
+        p = self.paced(rows, today=dt.date(2026, 8, 31), fallback_rate=29_145, fallback_workdays=22)
+        self.assertEqual(p.per_workday, 40_000)
+        self.assertEqual(p.per_workday_source, "이번 달 실적")
+
+    def test_projection_waits_for_enough_days(self):
+        rows = [cost(1, "주유", 50_000)]
+        early = self.paced(rows, today=dt.date(2026, 8, 2), fallback_rate=30_000, fallback_workdays=20)
+        self.assertIsNone(early.projected)
+        self.assertIsNone(early.on_track)
+
+        later = self.paced(rows, today=dt.date(2026, 8, 31))
+        self.assertEqual(later.projected, 50_000)
+        self.assertTrue(later.on_track)
+
+    def test_projection_flags_an_overrun(self):
+        rows = [cost(d, "주유", 100_000) for d in range(1, 11)]
+        p = self.paced(rows, today=dt.date(2026, 8, 10))
+        self.assertGreater(p.projected, 1_000_000)
+        self.assertFalse(p.on_track)
+
+    def test_affordable_workdays_uses_the_remaining_budget(self):
+        rows = [cost(1, "주유", 100_000)]
+        p = self.paced(rows, today=dt.date(2026, 8, 2), fallback_rate=50_000, fallback_workdays=20)
+        self.assertEqual(p.affordable_workdays, 900_000 // 50_000)
+
+    def test_no_records_yields_no_rate(self):
+        p = self.paced([], today=dt.date(2026, 8, 10))
+        self.assertEqual(p.per_workday, 0)
+        self.assertEqual(p.affordable_workdays, 0)
+        self.assertEqual(p.per_workday_source, "기록 없음")
+
+    def test_elapsed_days_cap_at_month_end_for_past_months(self):
+        rows = [cost(1, "주유", 10_000)]
+        p = self.paced(rows, today=dt.date(2026, 12, 25))
+        self.assertEqual(p.elapsed_days, 31)
+        self.assertEqual(p.remaining_days, 0)
+
+
+class MonthReferenceTest(unittest.TestCase):
+    def test_returns_rate_and_workdays(self):
+        rows = [cost(1, "주유", 30_000), cost(1, "톨비", 10_000), cost(5, "주유", 20_000)]
+        rate, days = business.month_reference(rows, Month(2026, 8))
+        self.assertEqual(days, 2)
+        self.assertEqual(rate, 30_000)
+
+    def test_empty_month_is_zero(self):
+        self.assertEqual(business.month_reference([], Month(2026, 8)), (0, 0))

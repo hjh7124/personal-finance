@@ -392,12 +392,13 @@ def render_business(costs: list[business_mod.BusinessCost], month: Month | None 
 
 
 def render_budget(
-    statuses: list[business_mod.BudgetStatus], *, monthly_rate: int = 0
+    paces: list[business_mod.BudgetPace], *, monthly_rate: int = 0
 ) -> str:
-    if not statuses:
+    if not paces:
         return ""
     lines = [title("경비 예산")]
-    for status in statuses:
+    for pace in paces:
+        status = pace.status
         budget = status.budget
         period = "매달" if budget.period == "monthly" else "총액"
         mark = "▲" if status.is_over else ("!" if status.ratio >= 0.8 else "○")
@@ -411,9 +412,42 @@ def render_budget(
 
         left = status.months_left(monthly_rate)
         if left is not None:
+            lines.append(f"    {pad('지금 속도로', 12)}{pad(f'{left:.1f}개월치', 15, 'right')}")
+
+        if budget.period == "monthly" and pace.per_workday:
+            lines.append("")
             lines.append(
-                f"    {pad('지금 속도로', 12)}{pad(f'{left:.1f}개월치', 15, 'right')}"
+                f"    {pad('경과', 12)}"
+                f"{pad(f'{pace.elapsed_days}/{pace.total_days}일', 15, 'right')}"
+                f"   현장 {pace.workdays}일 · 예상 {pace.expected_workdays}일"
             )
+            lines.append(
+                f"    {pad('하루 단가', 12)}{pad(won(pace.per_workday), 15, 'right')}"
+                f"   {pace.per_workday_source}"
+            )
+            lines.append(
+                f"    {pad('허용 단가', 12)}{pad(won(pace.affordable_rate), 15, 'right')}"
+                f"   한도 ÷ 예상 현장 일수"
+            )
+            headroom = pace.rate_headroom
+            sign = "여유" if headroom >= 0 else "초과"
+            lines.append(
+                f"    {pad(sign, 12)}"
+                f"{pad(('+' if headroom >= 0 else '−') + won(abs(headroom)), 15, 'right')}"
+                f"   하루당"
+            )
+            lines.append(
+                f"    {pad('남은 예산', 12)}"
+                f"{pad(f'{pace.affordable_workdays}일치', 15, 'right')}"
+                f"   앞으로 나갈 수 있는 날"
+            )
+            projected = pace.projected
+            if projected is not None:
+                verdict = "한도 안" if pace.on_track else "한도 초과 예상"
+                lines.append(
+                    f"    {pad('월말 추정', 12)}{pad(won(projected), 15, 'right')}   {verdict}"
+                )
+
         if budget.note:
             lines.extend(wrap(budget.note, WIDTH, indent="    "))
     lines.append("")
