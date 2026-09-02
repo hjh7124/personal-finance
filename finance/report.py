@@ -391,8 +391,55 @@ def render_business(costs: list[business_mod.BusinessCost], month: Month | None 
     return "\n".join(lines)
 
 
+def render_project_pace(pace: business_mod.ProjectPace) -> list[str]:
+    """기한이 있는 총액 예산 — 끝까지 버티는가."""
+    status = pace.status
+    lines = ["", f"    {pad('종료일', 12)}{pad(str(pace.end_date), 15, 'right')}   {pace.days_left}일 남음"]
+    lines.append(
+        f"    {pad('예상 출근', 12)}{pad(f'{pace.expected_workdays_left}일', 15, 'right')}"
+        f"   출근율 {pace.workday_ratio * 100:.0f}% 기준"
+    )
+    lines.append(
+        f"    {pad('하루 단가', 12)}{pad(won(pace.per_workday), 15, 'right')}   지난달 실적"
+    )
+    lines.append(
+        f"    {pad('허용 단가', 12)}{pad(won(pace.allowance_per_workday), 15, 'right')}"
+        f"   남은 예산 ÷ 남은 출근"
+    )
+    lines.append("    " + "─" * (WIDTH - 6))
+    lines.append(
+        f"    {pad('남은 기간 예상', 14)}{pad(won(pace.projected_spend_left), 13, 'right')}"
+    )
+    lines.append(
+        f"    {pad('종료 시 총액', 14)}{pad(won(pace.projected_final), 13, 'right')}"
+        f"   / {won(status.limit)}"
+    )
+    headroom = pace.headroom
+    lines.append(
+        f"    {pad('남거나 모자란 돈', 14)}"
+        f"{pad(('+' if headroom >= 0 else '−') + won(abs(headroom)), 13, 'right')}"
+    )
+
+    if headroom < 0:
+        lines += _bullet(
+            f"이 페이스로는 종료 전에 {won(-headroom)} 모자랍니다. "
+            + (f"{pace.runs_out_on} 무렵 바닥납니다." if pace.runs_out_on else ""),
+            marker="!",
+        )
+    elif status.limit and headroom < status.limit * 0.05:
+        lines += _bullet(
+            f"거의 정확히 맞아떨어집니다. 여유가 {won(headroom)}뿐이라 "
+            f"하루 단가가 {won(pace.allowance_per_workday)}을 넘는 순간 모자랍니다.",
+            marker="▲",
+        )
+    else:
+        lines += _bullet(f"종료일까지 {won(headroom)} 남습니다.")
+    return lines
+
+
 def render_budget(
-    paces: list[business_mod.BudgetPace], *, monthly_rate: int = 0
+    paces: list[business_mod.BudgetPace], *, monthly_rate: int = 0,
+    project_paces: dict[str, business_mod.ProjectPace] | None = None,
 ) -> str:
     if not paces:
         return ""
@@ -401,7 +448,13 @@ def render_budget(
         status = pace.status
         budget = status.budget
         period = "매달" if budget.period == "monthly" else "총액"
-        mark = "▲" if status.is_over else ("!" if status.ratio >= 0.8 else "○")
+        project = (project_paces or {}).get(budget.id)
+        if project is not None:
+            # 총액 예산은 지금 소진률보다 '끝까지 버티는가'가 판정이다.
+            room = project.headroom
+            mark = "▲" if room < 0 else ("!" if room < status.limit * 0.05 else "○")
+        else:
+            mark = "▲" if status.is_over else ("!" if status.ratio >= 0.8 else "○")
         lines.append(f"  {mark} {truncate(budget.name, 40)}  ({period} {man(budget.amount)}원)")
         lines.append(
             f"    {pad('쓴 금액', 12)}{pad(won(status.spent), 15, 'right')}"
@@ -410,9 +463,12 @@ def render_budget(
         label = "초과" if status.is_over else "남음"
         lines.append(f"    {pad(label, 12)}{pad(won(abs(status.remaining)), 15, 'right')}")
 
-        left = status.months_left(monthly_rate)
-        if left is not None:
-            lines.append(f"    {pad('지금 속도로', 12)}{pad(f'{left:.1f}개월치', 15, 'right')}")
+        if project is not None:
+            lines.extend(render_project_pace(project))
+        else:
+            left = status.months_left(monthly_rate)
+            if left is not None:
+                lines.append(f"    {pad('지금 속도로', 12)}{pad(f'{left:.1f}개월치', 15, 'right')}")
 
         if budget.period == "monthly" and pace.per_workday:
             lines.append("")

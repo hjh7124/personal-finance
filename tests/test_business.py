@@ -297,3 +297,86 @@ class MonthReferenceTest(unittest.TestCase):
 
     def test_empty_month_is_zero(self):
         self.assertEqual(business.month_reference([], Month(2026, 8)), (0, 0))
+
+
+class ProjectPaceTest(unittest.TestCase):
+    """기한이 있는 총액 예산 — 끝까지 버티는가."""
+
+    def budget(self, amount=1_000_000, end=dt.date(2026, 9, 18)):
+        return business.Budget(
+            id="b", name="프로젝트 경비", amount=amount, period="total",
+            start=Month(2026, 8), end_date=end,
+        )
+
+    def august(self, per_day=30_000, days=20):
+        return [cost(d, "주유", per_day) for d in range(1, days + 1)]
+
+    def paced(self, rows, *, today, budget=None):
+        budget = budget or self.budget()
+        status = business.evaluate_budget(budget, rows, as_of=Month(2026, 9))
+        return business.project_pace(status, rows, today=today, reference_month=Month(2026, 8))
+
+    def test_projects_to_the_end_date_using_the_workday_ratio(self):
+        p = self.paced(self.august(), today=dt.date(2026, 9, 1))
+        self.assertEqual(p.days_left, 18)
+        self.assertAlmostEqual(p.workday_ratio, 20 / 31, places=4)
+        self.assertEqual(p.expected_workdays_left, round(18 * 20 / 31))
+        self.assertEqual(p.per_workday, 30_000)
+
+    def test_headroom_positive_when_the_budget_holds(self):
+        p = self.paced(self.august(per_day=10_000), today=dt.date(2026, 9, 1))
+        self.assertGreater(p.headroom, 0)
+        self.assertIsNone(p.runs_out_on)
+
+    def test_headroom_negative_and_a_runout_date_when_it_does_not(self):
+        p = self.paced(self.august(per_day=45_000), today=dt.date(2026, 9, 1))
+        self.assertLess(p.headroom, 0)
+        self.assertIsNotNone(p.runs_out_on)
+        self.assertGreater(p.runs_out_on, dt.date(2026, 9, 1))
+
+    def test_allowance_is_remaining_over_remaining_workdays(self):
+        rows = self.august()
+        p = self.paced(rows, today=dt.date(2026, 9, 1))
+        self.assertEqual(
+            p.allowance_per_workday, p.status.remaining // p.expected_workdays_left
+        )
+
+    def test_past_the_end_date_nothing_is_left(self):
+        p = self.paced(self.august(), today=dt.date(2026, 10, 1))
+        self.assertEqual(p.days_left, 0)
+        self.assertEqual(p.expected_workdays_left, 0)
+        self.assertEqual(p.projected_spend_left, 0)
+        self.assertEqual(p.projected_final, p.status.spent)
+
+    def test_monthly_budget_gets_no_project_pace(self):
+        budget = business.Budget(
+            id="m", name="월 한도", amount=1_000_000, period="monthly", start=Month(2026, 8)
+        )
+        status = business.evaluate_budget(budget, self.august(), as_of=Month(2026, 9))
+        self.assertIsNone(
+            business.project_pace(status, self.august(), today=dt.date(2026, 9, 1),
+                                  reference_month=Month(2026, 8))
+        )
+
+    def test_total_budget_without_an_end_date_gets_no_project_pace(self):
+        budget = self.budget(end=None)
+        status = business.evaluate_budget(budget, self.august(), as_of=Month(2026, 9))
+        self.assertIsNone(
+            business.project_pace(status, self.august(), today=dt.date(2026, 9, 1),
+                                  reference_month=Month(2026, 8))
+        )
+
+
+class PrepaidTest(unittest.TestCase):
+    def test_prepaid_does_not_drain_my_account(self):
+        rows = [cost(3, "주유", 50_000, settled="선지급")]
+        self.assertEqual(business.total(rows), 50_000)
+        self.assertEqual(business.paid_from_my_account(rows), 0)
+        self.assertEqual(business.outstanding(rows), 0)
+
+    def test_prepaid_still_counts_against_the_budget(self):
+        budget = business.Budget(
+            id="b", name="경비", amount=1_000_000, period="total", start=Month(2026, 8)
+        )
+        rows = [cost(3, "주유", 400_000, settled="선지급")]
+        self.assertEqual(business.evaluate_budget(budget, rows, as_of=Month(2026, 8)).spent, 400_000)

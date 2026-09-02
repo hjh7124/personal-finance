@@ -24,9 +24,14 @@ COST_FIELDS = ["date", "site", "category", "amount", "settled", "memo"]
 #:   미정산   — 개인 돈으로 냈고 아직 못 받음 (빈 값도 이걸로 본다)
 #:   정산완료 — 개인 돈으로 냈고 받았음
 #:   법인카드 — 회사가 직접 결제. 애초에 내 통장에서 나가지 않았다
+#:   선지급   — 미리 받은 경비에서 나감. 받은 시점과 쓴 시점이 상쇄되므로
+#:              개인 자산은 줄지 않는다
 #:   자부담   — 내가 냈고 받을 생각이 없음
 #: 받았다고 표시하기 전까지는 못 받은 돈으로 본다.
-SETTLED_VALUES = {"", "미정산", "정산완료", "법인카드", "자부담"}
+SETTLED_VALUES = {"", "미정산", "정산완료", "법인카드", "선지급", "자부담"}
+
+#: 개인 자산을 실제로 줄이지 않는 결제 방식
+NO_DRAIN = {"법인카드", "선지급"}
 
 import csv
 
@@ -51,8 +56,12 @@ class BusinessCost:
 
     @property
     def hit_my_account(self) -> bool:
-        """내 통장에서 나갔는가. 법인카드 결제는 나가지 않았다."""
-        return self.settled != "법인카드"
+        """개인 자산을 줄였는가.
+
+        법인카드는 애초에 내 돈이 아니고, 선지급은 받은 돈에서 나가므로
+        받은 시점과 쓴 시점이 상쇄된다. 둘 다 개인 자산을 줄이지 않는다.
+        """
+        return self.settled not in NO_DRAIN
 
 
 def load_costs(path: Path) -> list[BusinessCost]:
@@ -159,6 +168,7 @@ class Budget:
     period: str
     site: str | None = None
     start: Month | None = None
+    end_date: dt.date | None = None
     note: str = ""
 
     def covers(self, cost: BusinessCost) -> bool:
@@ -306,6 +316,14 @@ def month_reference(
     return (total(scoped) // days if days else 0), days
 
 
+def _as_date(value: object) -> dt.date:
+    if isinstance(value, dt.datetime):
+        return value.date()
+    if isinstance(value, dt.date):
+        return value
+    return dt.date.fromisoformat(str(value))
+
+
 def load_budgets(data_dir: Path) -> list[Budget]:
     from .config import ConfigError, read_yaml
 
@@ -329,6 +347,7 @@ def load_budgets(data_dir: Path) -> list[Budget]:
                 period=period,
                 site=str(entry["site"]) if entry.get("site") else None,
                 start=Month.parse(entry["start"]) if entry.get("start") else None,
+                end_date=_as_date(entry["end_date"]) if entry.get("end_date") else None,
                 note=" ".join(str(entry.get("note", "") or "").split()),
             )
         )
@@ -347,3 +366,80 @@ def evaluate_budget(budget: Budget, costs: list[BusinessCost], *, as_of: Month) 
         scoped = [c for c in costs if budget.covers(c) and c.month <= as_of]
     months = len({c.month for c in scoped})
     return BudgetStatus(budget=budget, spent=total(scoped), months_counted=months)
+
+
+@dataclass(frozen=True)
+class ProjectPace:
+    """기한이 있는 총액 예산이 끝까지 버티는가.
+
+    월 한도와는 질문이 다르다. 매달 채워지는 돈이 아니라 한 번 받은 돈이므로,
+    남은 기간에 나갈 횟수를 곱해 끝까지 계산해봐야 한다. 여유가 있으면 남고,
+    없으면 종료 전에 바닥난다.
+    """
+
+    status: BudgetStatus
+    today: dt.date
+    end_date: dt.date
+    per_workday: int
+    workday_ratio: float
+
+    @property
+    def days_left(self) -> int:
+        return max(0, (self.end_date - self.today).days + 1)
+
+    @property
+    def expected_workdays_left(self) -> int:
+        return round(self.days_left * self.workday_ratio)
+
+    @property
+    def projected_spend_left(self) -> int:
+        return self.expected_workdays_left * self.per_workday
+
+    @property
+    def projected_final(self) -> int:
+        return self.status.spent + self.projected_spend_left
+
+    @property
+    def headroom(self) -> int:
+        """끝까지 쓰고 남는 돈. 음수면 종료 전에 바닥난다."""
+        return self.status.remaining - self.projected_spend_left
+
+    @property
+    def allowance_per_workday(self) -> int:
+        """남은 예산을 남은 출근 횟수로 나눈 값. 이 선을 넘으면 모자란다."""
+        days = self.expected_workdays_left
+        return self.status.remaining // days if days else self.status.remaining
+
+    @property
+    def runs_out_on(self) -> dt.date | None:
+        """지금 단가로 예산이 바닥나는 날. 끝까지 버티면 None."""
+        if self.headroom >= 0 or self.per_workday <= 0 or self.workday_ratio <= 0:
+            return None
+        affordable = self.status.remaining // self.per_workday
+        return self.today + dt.timedelta(days=round(affordable / self.workday_ratio))
+
+
+def project_pace(
+    status: BudgetStatus,
+    costs: list[BusinessCost],
+    *,
+    today: dt.date,
+    reference_month: Month,
+) -> ProjectPace | None:
+    """총액 예산 + 종료일이 있을 때의 소진 전망.
+
+    현장에 나가는 빈도(workday_ratio)는 기준월 실적에서 가져온다.
+    경비는 매일 나가지 않으므로 달력 일수로 나누면 과대 추정된다.
+    """
+    budget = status.budget
+    if budget.period != "total" or budget.end_date is None:
+        return None
+
+    scoped = [c for c in costs if c.month == reference_month and budget.covers(c)]
+    days = workdays(scoped)
+    rate = total(scoped) // days if days else 0
+    ratio = days / reference_month.last_date().day if days else 0.0
+    return ProjectPace(
+        status=status, today=today, end_date=budget.end_date,
+        per_workday=rate, workday_ratio=ratio,
+    )
