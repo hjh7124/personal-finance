@@ -380,3 +380,13 @@ class PrepaidTest(unittest.TestCase):
         )
         rows = [cost(3, "주유", 400_000, settled="선지급")]
         self.assertEqual(business.evaluate_budget(budget, rows, as_of=Month(2026, 8)).spent, 400_000)
+
+
+class SettledMixTest(unittest.TestCase):
+    def test_groups_by_settlement_state(self):
+        rows = [
+            cost(1, "주유", 50_000, settled="선지급"),
+            cost(2, "톨비", 3_000, settled="선지급"),
+            cost(3, "식사", 10_000, settled="법인카드"),
+        ]
+        self.assertEqual(business.by_settled(rows), {"선지급": 53_000, "법인카드": 10_000})

@@ -387,7 +387,10 @@ def render_business(costs: list[business_mod.BusinessCost], month: Month | None 
             "'정산완료'로 바꾸세요."
         )
     elif mine == 0:
-        lines += _bullet("전액 법인카드 결제라 개인 현금흐름에는 영향이 없습니다.")
+        how = " · ".join(
+            f"{name} {won(amount)}" for name, amount in business_mod.by_settled(scoped).items()
+        )
+        lines += _bullet(f"개인 자산이 줄지 않는 결제만 있습니다 — {how}.")
     return "\n".join(lines)
 
 

@@ -121,6 +121,13 @@ def outstanding(rows: list[BusinessCost]) -> int:
     return sum(r.amount for r in rows if r.is_outstanding)
 
 
+def by_settled(rows: list[BusinessCost]) -> dict[str, int]:
+    totals: dict[str, int] = defaultdict(int)
+    for row in rows:
+        totals[row.settled] += row.amount
+    return dict(sorted(totals.items(), key=lambda kv: -kv[1]))
+
+
 def paid_from_my_account(rows: list[BusinessCost]) -> int:
     """내 통장에서 실제로 나간 업무 경비. 법인카드 결제는 빠진다."""
     return sum(r.amount for r in rows if r.hit_my_account)
